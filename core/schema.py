@@ -298,3 +298,28 @@ class DataAuditEvent(BaseModel):
     details: Dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[str] = None
 
+class AnalysisRun(BaseModel):
+    """
+    A structured record of one completed analysis/tool run.
+
+    This is used by the UI Results Panel and future report export.
+    """
+    run_id: str
+    tool_name: str
+    action_id: Optional[str] = None
+    data_version_id: Optional[str] = None
+
+    status: str = "unknown"
+    success: bool = False
+    created_at: Optional[str] = None
+
+    title: str = ""
+    summary: str = ""
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    tables: Dict[str, Any] = Field(default_factory=dict)
+    artifacts: List[Dict[str, Any]] = Field(default_factory=list)
+
+    raw_observation_id: Optional[str] = None
+

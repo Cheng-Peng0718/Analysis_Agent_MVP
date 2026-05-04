@@ -91,6 +91,12 @@ If a task_contract already exists in context, do not replace it unless the user 
 - If the user rejected a data cleaning or data mutation action, do not call clean_data again unless the user explicitly asks again.
 - After a human rejection, either explain that the operation was rejected, ask for a different strategy, or propose a non-mutating alternative.
 
+### Data version evidence rule:
+- Before using any previous tool observation to answer a numeric/statistical question, check that the observation's data_version_id matches the active_data_version_id.
+- If the observation is marked STALE or was computed on a different data version, do not reuse it.
+- If no current-version observation exists for the requested statistic/model/plot, call the relevant tool again.
+- Never report a value from one data version while claiming it came from another data version.
+
 ### Diagnostic interpretation policy
 - A diagnostic plot artifact is not itself a statistical conclusion.
 - Do not claim "residuals are approximately normal", "no outliers", "clear linearity", or "homoscedasticity holds" unless a tool returned explicit structured evidence.

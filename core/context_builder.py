@@ -4,6 +4,64 @@ import pandas as pd
 from core.schema import ContextPackage, DatasetProfile, ColumnProfile
 
 
+def get_observation_data_version(obs):
+    if not isinstance(obs, dict):
+        return None
+
+    if obs.get("data_version_id"):
+        return obs.get("data_version_id")
+
+    structured = obs.get("structured_data", {})
+    if isinstance(structured, dict):
+        return structured.get("data_version_id")
+
+    return None
+
+def format_observation_history(observations, active_data_version_id=None, max_items=20):
+    lines = []
+
+    for obs in (observations or [])[-max_items:]:
+        if not isinstance(obs, dict):
+            continue
+
+        tool_name = obs.get("tool_name", "unknown_tool")
+        status = obs.get("status", "unknown")
+        success = obs.get("success")
+        message = obs.get("message", "")
+        summary = obs.get("summary", "")
+        obs_version = get_observation_data_version(obs)
+
+        if active_data_version_id and obs_version:
+            if obs_version == active_data_version_id:
+                version_status = "CURRENT"
+            else:
+                version_status = "STALE"
+        else:
+            version_status = "UNKNOWN_VERSION"
+
+        lines.append(
+            f"- tool={tool_name}, status={status}, success={success}, "
+            f"data_version_id={obs_version}, version_status={version_status}, "
+            f"message={message}, summary={summary}"
+        )
+
+        # 关键：只有 CURRENT observation 才允许暴露 payload
+        if version_status == "CURRENT":
+            structured = obs.get("structured_data", {})
+            payload = structured.get("payload") if isinstance(structured, dict) else None
+
+            if payload:
+                lines.append(f"  payload={payload}")
+
+        elif version_status == "STALE":
+            lines.append(
+                "  NOTE: This observation was computed on an older data version. "
+                "Do not use it for current numeric answers."
+            )
+
+    return "\n".join(lines) if lines else "No previous observations."
+
+
 def generate_profile(file_path: str) -> DatasetProfile:
     """Build a dataset profile report (multiple formats supported)."""
 
@@ -108,7 +166,11 @@ def build_context(step,
         rows = getattr(profile, "n_rows", "unknown")
         cols = list(getattr(profile, "columns", {}).keys())
 
-    history_log = ""
+    history_log = format_observation_history(
+        observations=observations,
+        active_data_version_id=active_data_version_id,
+    )
+
     for idx, obs in enumerate(observations):
         if isinstance(obs, dict):
             t_name = obs.get("tool_name", "unknown_tool")
@@ -198,6 +260,12 @@ def build_context(step,
         f"User request:\n{user_request}\n\n"
         f"Dataset overview:\n- rows: {rows}\n- columns: {cols}\n\n"
         f"{data_version_log}\n"
+        f"History of actions and results:\n{history_log}\n\n"
+        "Evidence reuse policy:\n"
+        "- A previous observation may be reused for a numeric answer only if its "
+        "data_version_id equals the current active_data_version_id.\n"
+        "- Observations marked STALE must not be used to answer current numeric questions.\n"
+        "- If the needed result is only available from a stale observation, call the appropriate tool again.\n\n"
         f"History of actions and results:\n{history_log}\n\n"
         f"{deliverable_log}\n"
         f"Read the history carefully. Do not repeat successful tools with the same intent. "

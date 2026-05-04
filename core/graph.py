@@ -16,6 +16,7 @@ from tools.execution import execute_tool
 import hashlib
 import json
 from core.deliverables import check_deliverables
+from core.analysis_runs import build_analysis_run_from_observation
 
 # --- Graph nodes ---
 def build_context_node(state: GraphState):
@@ -81,15 +82,19 @@ def supervisor_node(state: GraphState):
 
     contract = getattr(action, "task_contract", None)
     if contract is not None:
-
-        ##### DEBUG
-        print(f"[TASK CONTRACT DECLARED] deliverables={len(contract.get('required_deliverables', []))}")
-        ##### DEBUG
-
         if hasattr(contract, "model_dump"):
-            updates["task_contract"] = contract.model_dump()
+            contract_dict = contract.model_dump()
+        elif isinstance(contract, dict):
+            contract_dict = contract
         else:
-            updates["task_contract"] = contract
+            contract_dict = {}
+
+        print(
+            f"[TASK CONTRACT DECLARED] "
+            f"deliverables={len(contract_dict.get('required_deliverables', []))}"
+        )
+
+        updates["task_contract"] = contract_dict
 
     return updates
 
@@ -415,6 +420,7 @@ def summarize_node(state: GraphState):
                     if isinstance(result_obj, dict):
                         data_version_update = result_obj.get("data_version_update")
 
+
     updates = {
         "observations": [refined_observation],
 
@@ -425,7 +431,26 @@ def summarize_node(state: GraphState):
         "pending_action": None,
 
         "current_step": state.get("current_step", 0) + 1,
+
     }
+
+    # Phase 3: append successful tool result to Analysis Results registry
+    if status in {"ok", "warning"} and tool_name not in {"unknown_tool"}:
+        analysis_run = build_analysis_run_from_observation(
+            tool_name=tool_name,
+            action_id=getattr(current_action, "action_id", "unknown"),
+            arguments=arguments,
+            data_version_id=state.get("active_data_version_id"),
+            status=status,
+            success=success,
+            message=message,
+            payload=payload,
+            artifacts=artifacts,
+            observation_id=refined_observation["observation_id"],
+        )
+
+        existing_runs = state.get("analysis_runs", []) or []
+        updates["analysis_runs"] = existing_runs + [analysis_run]
 
     if data_version_update:
         new_version = data_version_update.get("new_version")

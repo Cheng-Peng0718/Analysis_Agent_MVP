@@ -47,6 +47,7 @@ with st.sidebar:
             st.session_state.thread_id = str(uuid.uuid4())
             st.session_state.messages = []
             st.session_state.resume_stream = False
+            st.session_state.analysis_runs = []
 
             config = {
                 "configurable": {
@@ -133,6 +134,56 @@ with st.sidebar:
                         st.json(details)
 
                     st.divider()
+
+        analysis_runs = st.session_state.get("analysis_runs", [])
+
+        if analysis_runs:
+            st.divider()
+            st.subheader("📊 Analysis Results")
+
+            for run in analysis_runs[-10:]:
+                title = run.get("title") or run.get("tool_name", "Analysis")
+                status = run.get("status", "unknown")
+                data_version_id = run.get("data_version_id")
+
+                with st.expander(f"{title} · {status}"):
+                    if data_version_id:
+                        st.caption(f"data version: `{data_version_id}`")
+
+                    summary_text = run.get("summary", "")
+                    if summary_text:
+                        st.write(summary_text)
+
+                    metrics = run.get("metrics", {})
+                    if metrics:
+                        st.markdown("**Metrics**")
+                        st.json(metrics)
+
+                    tables = run.get("tables", {})
+                    if tables:
+                        st.markdown("**Tables**")
+                        for table_name, table_data in tables.items():
+                            st.caption(table_name)
+                            st.json(table_data)
+
+                    args = run.get("arguments", {})
+                    if args:
+                        st.markdown("**Arguments**")
+                        st.json(args)
+
+                    artifacts = run.get("artifacts", [])
+                    if artifacts:
+                        st.markdown("**Artifacts**")
+                        for artifact in artifacts:
+                            artifact_type = artifact.get("type")
+                            path = artifact.get("path")
+                            name = artifact.get("name", path)
+
+                            if artifact_type == "png" and path:
+                                st.caption(name)
+                                st.image(path)
+                            else:
+                                st.json(artifact)
 
     state_snapshot = app.get_state(config)
     plan = state_snapshot.values.get("analysis_plan")
@@ -347,6 +398,7 @@ if (is_new_task or is_resuming) and not is_interrupted:
                 "data_versions": st.session_state.get("data_versions", []),
                 "active_data_version_id": st.session_state.get("active_data_version_id"),
                 "data_audit_log": st.session_state.get("data_audit_log", []),
+                "analysis_runs": st.session_state.get("analysis_runs", []),
             }
 
         st.session_state.resume_stream = False
@@ -374,6 +426,9 @@ if (is_new_task or is_resuming) and not is_interrupted:
 
                 if state_data.get("data_audit_log") is not None:
                     st.session_state.data_audit_log = state_data.get("data_audit_log")
+
+                if state_data.get("analysis_runs") is not None:
+                    st.session_state.analysis_runs = state_data.get("analysis_runs")
 
                 deliverable_check = state_data.get("deliverable_check") if isinstance(state_data, dict) else None
 
@@ -441,6 +496,9 @@ if (is_new_task or is_resuming) and not is_interrupted:
 
             if values.get("data_audit_log") is not None:
                 st.session_state.data_audit_log = values.get("data_audit_log")
+
+            if values.get("analysis_runs") is not None:
+                st.session_state.analysis_runs = values.get("analysis_runs")
 
         if post_stream_state.next and "human_review" in post_stream_state.next:
             live_display.empty()
