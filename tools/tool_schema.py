@@ -120,6 +120,42 @@ def _profile_column_names(profile) -> list[str]:
 
     return []
 
+def _get_unified_plugin_schema(tool_name: str):
+    """
+    Return a legacy-shaped schema dictionary from a unified AnalysisToolPlugin,
+    if the tool is provided by the unified plugin system.
+
+    During migration:
+    - unified plugin schema wins
+    - legacy TOOL_SCHEMAS remains fallback
+    """
+    try:
+        from core.analysis_tool_plugins import get_plugin
+
+        plugin = get_plugin(tool_name)
+
+        if plugin is None:
+            return None
+
+        argument_schema = getattr(plugin, "argument_schema", None)
+
+        if argument_schema is None:
+            return None
+
+        if hasattr(argument_schema, "to_legacy_schema_dict"):
+            return argument_schema.to_legacy_schema_dict()
+
+        return {
+            "required": getattr(argument_schema, "required", {}) or {},
+            "optional": getattr(argument_schema, "optional", {}) or {},
+            "column_args": getattr(argument_schema, "column_args", []) or [],
+            "column_list_args": getattr(argument_schema, "column_list_args", []) or [],
+            "allow_all_columns": getattr(argument_schema, "allow_all_columns", False),
+        }
+
+    except Exception:
+        return None
+
 
 def validate_tool_call_schema(tool_name: str, arguments: Dict[str, Any], profile=None) -> Dict[str, Any]:
     if arguments is None:
@@ -137,9 +173,12 @@ def validate_tool_call_schema(tool_name: str, arguments: Dict[str, Any], profile
             },
         }
 
-    schema = TOOL_SCHEMAS.get(tool_name)
+    schema = _get_unified_plugin_schema(tool_name)
 
-    # Phase 0: tools without schema get a warning but are allowed
+    if schema is None:
+        schema = TOOL_SCHEMAS.get(tool_name)
+
+    # During migration: tools without schema get a warning but are allowed.
     if schema is None:
         return {
             "status": "warning",
