@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 import re
 import numpy as np
-
+import pandas as pd
 from core.state import GraphState
 # Import VerificationResult for verify_node.
 from core.schema import Observation, ContextPackage, VerificationResult
@@ -18,6 +18,21 @@ import json
 from core.deliverables import check_deliverables
 from core.analysis_runs import build_analysis_run_from_observation
 from core.data_versions import get_active_data_path
+from core.dataset_intelligence.profiler import profile_dataframe, summarize_profile
+from core.dataset_intelligence.capability_map import build_capability_map
+from core.interaction_intent import classify_interaction_intent
+from core.dataset_intelligence.schemas import CapabilityMap, DatasetProfileV2
+from core.planning.planner import build_plan_from_capability_map
+from core.planning.verifier import verify_plan
+from core.planning.renderer import render_plan_for_user
+from core.responses import make_assistant_response
+from core.planning.execution_queue import (
+    find_next_executable_step,
+    plan_step_to_action,
+    mark_plan_step_started,
+    mark_plan_step_after_execution,
+)
+
 
 def _as_plain_dict(obj):
     if obj is None:
@@ -107,13 +122,35 @@ def _validate_data_version_update(data_version_update):
         "audit_event": audit_event,
     }
 
+
+def _load_dataframe_for_dataset_intelligence(path: str) -> pd.DataFrame:
+    """
+    Load the active dataset for Dataset Intelligence.
+
+    This is separate from generate_profile(), because generate_profile()
+    returns the legacy DatasetProfile, while Dataset Intelligence needs
+    the actual DataFrame.
+    """
+    lower_path = str(path).lower()
+
+    if lower_path.endswith(".parquet"):
+        return pd.read_parquet(path)
+
+    if lower_path.endswith(".csv"):
+        return pd.read_csv(path)
+
+    if lower_path.endswith(".xlsx") or lower_path.endswith(".xls"):
+        return pd.read_excel(path)
+
+    raise ValueError(f"Unsupported active data file type for profiling: {path}")
+
 # --- Graph nodes ---
 def build_context_node(state: GraphState):
     step = state.get("current_step", 0) + 1
 
     current_workspace = state["workspace_dir"]
 
-    # Resolve data file dynamically (any working_data* in sandbox).
+    # Resolve active data file from the data-version system.
     current_data_path = get_active_data_path(
         workspace_dir=current_workspace,
         data_versions=state.get("data_versions", []) or [],
@@ -129,8 +166,24 @@ def build_context_node(state: GraphState):
             f"resolved_path={current_data_path}"
         )
 
-    # Refresh dataset profile from sandbox.
+    # Legacy profile used by the existing supervisor / verifier path.
+    # Keep this for compatibility.
     new_profile = generate_profile(current_data_path)
+
+    # New Dataset Intelligence profile.
+    # This is the real dataset overview used by advisory / plan-only flows.
+    df = _load_dataframe_for_dataset_intelligence(current_data_path)
+
+    active_data_version_id = state.get("active_data_version_id") or "unknown"
+
+    dataset_profile_v2 = profile_dataframe(
+        df,
+        dataset_name=state.get("dataset_name", "uploaded_dataset"),
+        data_version_id=active_data_version_id,
+    )
+
+    dataset_summary = summarize_profile(dataset_profile_v2)
+    capability_map = build_capability_map(dataset_profile_v2)
 
     context = build_context(
         step=step,
@@ -148,8 +201,290 @@ def build_context_node(state: GraphState):
     return {
         "current_step": step,
         "current_context_text": context.context_text,
-        "dataset_profile": new_profile
+
+        # Keep legacy profile for current runtime compatibility.
+        "dataset_profile": new_profile,
+
+        # New Dataset Intelligence state.
+        # Store as plain dict to avoid future LangGraph checkpoint issues.
+        "dataset_profile_v2": dataset_profile_v2.model_dump(),
+        "dataset_summary": dataset_summary.model_dump(),
+        "capability_map": capability_map.model_dump(),
     }
+
+def intent_router_node(state: GraphState):
+    user_request = state.get("user_request", "")
+    intent = classify_interaction_intent(user_request)
+
+    print("\n" + "=" * 40)
+    print("[INTENT ROUTER]")
+    print(f"user_request = {user_request}")
+    print(f"intent = {intent.value}")
+    print("=" * 40 + "\n")
+
+    return {
+        "interaction_intent": intent.value,
+    }
+
+def advisory_answer_node(state: GraphState):
+    summary = state.get("dataset_summary") or {}
+    capability_map = state.get("capability_map") or {}
+
+    n_rows = summary.get("n_rows", "unknown")
+    n_cols = summary.get("n_cols", "unknown")
+
+    numeric_cols = summary.get("numeric_columns", []) or []
+    categorical_cols = summary.get("categorical_columns", []) or []
+    binary_cols = summary.get("binary_columns", []) or []
+    id_like_cols = summary.get("id_like_columns", []) or []
+    missingness = summary.get("missingness_summary", {}) or {}
+
+    capabilities = capability_map.get("capabilities", []) or []
+
+    ready = [c for c in capabilities if c.get("status") == "ready"]
+    needs_choice = [c for c in capabilities if c.get("status") == "needs_user_choice"]
+    not_applicable = [
+        c for c in capabilities
+        if c.get("status") in {"not_applicable", "blocked"}
+    ]
+
+    lines = []
+
+    lines.append("I have profiled the current dataset. Here is what you can do next.")
+    lines.append("")
+    lines.append("Dataset overview:")
+    lines.append(f"- Rows: {n_rows}")
+    lines.append(f"- Columns: {n_cols}")
+    lines.append(f"- Numeric columns: {len(numeric_cols)}")
+    lines.append(f"- Categorical columns: {len(categorical_cols)}")
+    lines.append(f"- Binary columns: {len(binary_cols)}")
+    lines.append(f"- ID-like columns: {len(id_like_cols)}")
+    lines.append(
+        f"- Columns with missing values: "
+        f"{missingness.get('n_columns_with_missing', 0)}"
+    )
+    lines.append("")
+
+    if ready:
+        lines.append("Analyses that appear ready:")
+        for cap in ready[:8]:
+            lines.append(f"- {cap.get('display_name', cap.get('tool_name'))}: {cap.get('reason')}")
+        lines.append("")
+
+    if needs_choice:
+        lines.append("Analyses that may be useful but need your choices first:")
+        for cap in needs_choice[:8]:
+            choices = ", ".join(cap.get("required_user_choices", []) or [])
+            lines.append(
+                f"- {cap.get('display_name', cap.get('tool_name'))}: "
+                f"needs {choices or 'additional choices'}"
+            )
+        lines.append("")
+
+    if not_applicable:
+        lines.append("Currently blocked or not recommended:")
+        for cap in not_applicable[:5]:
+            lines.append(f"- {cap.get('display_name', cap.get('tool_name'))}: {cap.get('reason')}")
+        lines.append("")
+
+    lines.append("I have not run any analysis tools yet.")
+    lines.append("If you want, say `make a plan` and I will draft a data-aware plan without executing it.")
+
+    answer = "\n".join(lines)
+
+    assistant_response = make_assistant_response(
+        response_type="advisory",
+        content=answer,
+        source_node="advisory_answer",
+        data_version_id=state.get("active_data_version_id"),
+        metadata={
+            "interaction_intent": state.get("interaction_intent"),
+        },
+    )
+
+    return {
+        "assistant_response": assistant_response,
+
+        # Temporary legacy compatibility.
+        # Eventually remove final_answer after UI fully migrates.
+        "final_answer": answer,
+
+        "current_action": None,
+        "current_execution": None,
+        "current_verification": None,
+    }
+
+def plan_only_node(state: GraphState):
+    capability_map_dict = state.get("capability_map")
+    profile_dict = state.get("dataset_profile_v2")
+
+    if not capability_map_dict or not profile_dict:
+        return {
+            "final_answer": (
+                "I cannot create a data-aware plan yet because the dataset profile "
+                "is not available. Please upload or reload a dataset first."
+            ),
+            "pending_plan": None,
+            "plan_status": "blocked",
+            "current_action": None,
+            "current_execution": None,
+            "current_verification": None,
+        }
+
+    capability_map = CapabilityMap.model_validate(capability_map_dict)
+    dataset_profile = DatasetProfileV2.model_validate(profile_dict)
+
+    plan = build_plan_from_capability_map(
+        user_request=state.get("user_request", ""),
+        capability_map=capability_map,
+    )
+
+    verified_plan = verify_plan(plan, dataset_profile)
+    rendered = render_plan_for_user(verified_plan)
+
+    print("\n" + "=" * 40)
+    print("[PLAN ONLY NODE]")
+    print(f"plan_id = {verified_plan.plan_id}")
+    print(f"plan_status = {verified_plan.status}")
+    print(f"n_steps = {len(verified_plan.steps)}")
+    print(f"n_blocked = {len(verified_plan.blocked_or_not_recommended)}")
+    print("=" * 40 + "\n")
+
+    assistant_response = make_assistant_response(
+        response_type="plan",
+        content=rendered,
+        source_node="plan_only",
+        data_version_id=state.get("active_data_version_id"),
+        plan_id=verified_plan.plan_id,
+        plan_status=verified_plan.status,
+        metadata={
+            "interaction_intent": state.get("interaction_intent"),
+            "n_steps": len(verified_plan.steps),
+            "n_blocked": len(verified_plan.blocked_or_not_recommended),
+        },
+    )
+
+    return {
+        "pending_plan": verified_plan.model_dump(),
+        "plan_status": verified_plan.status,
+        "assistant_response": assistant_response,
+
+        # Temporary legacy compatibility.
+        "final_answer": rendered,
+
+        # Hard safety reset.
+        "current_action": None,
+        "current_execution": None,
+        "current_verification": None,
+        "human_review_required": False,
+        "pending_action": None,
+    }
+
+def route_after_intent(state: GraphState):
+    intent = state.get("interaction_intent")
+
+    print(f"[ROUTE AFTER INTENT] intent = {intent}")
+
+    if intent == "advisory":
+        return "advisory_answer"
+
+    if intent == "plan_only":
+        return "plan_only"
+
+    if intent == "execute_plan":
+        return "execute_pending_plan"
+
+    # For direct_tool or unknown, fall back to the existing router gate.
+    # This preserves your old planner/supervisor behavior.
+    return router_gate(state)
+
+def execute_pending_plan_node(state: GraphState):
+    pending_plan = state.get("pending_plan")
+
+    if not pending_plan:
+        content = (
+            "There is no pending plan to execute. "
+            "Please ask me to make a plan first."
+        )
+
+        assistant_response = make_assistant_response(
+            response_type="plan_execution_status",
+            content=content,
+            source_node="execute_pending_plan",
+            data_version_id=state.get("active_data_version_id"),
+            metadata={"reason": "no_pending_plan"},
+        )
+
+        return {
+            "assistant_response": assistant_response,
+            "final_answer": content,
+            "current_action": None,
+            "current_execution": None,
+            "current_verification": None,
+        }
+
+    next_step = find_next_executable_step(pending_plan)
+
+    if next_step is None:
+        content = (
+            "The pending plan has no execution-ready steps. "
+            "Some steps may need your variable choices, or they may be blocked/not applicable."
+        )
+
+        assistant_response = make_assistant_response(
+            response_type="plan_execution_status",
+            content=content,
+            source_node="execute_pending_plan",
+            data_version_id=state.get("active_data_version_id"),
+            plan_id=pending_plan.get("plan_id"),
+            plan_status=pending_plan.get("status"),
+            metadata={"reason": "no_execution_ready_steps"},
+        )
+
+        return {
+            "assistant_response": assistant_response,
+            "final_answer": content,
+            "plan_execution_status": "blocked_no_ready_steps",
+            "current_action": None,
+            "current_execution": None,
+            "current_verification": None,
+        }
+
+    action = plan_step_to_action(next_step)
+
+    updated_plan = mark_plan_step_started(
+        pending_plan,
+        step_id=next_step["step_id"],
+        action_id=action.action_id,
+    )
+
+    print("\n" + "=" * 40)
+    print("[EXECUTE PENDING PLAN]")
+    print(f"plan_id = {pending_plan.get('plan_id')}")
+    print(f"step_id = {next_step.get('step_id')}")
+    print(f"tool_name = {action.tool_name}")
+    print(f"arguments = {action.arguments}")
+    print("=" * 40 + "\n")
+
+    return {
+        "pending_plan": updated_plan,
+        "plan_status": updated_plan.get("status"),
+        "current_plan_step_id": next_step["step_id"],
+        "plan_execution_status": "started_step",
+
+        # This enters the existing verify -> human_review/execute path.
+        "current_action": action,
+        "current_execution": None,
+        "current_verification": None,
+    }
+
+def route_after_execute_pending_plan(state: GraphState):
+    action = state.get("current_action")
+
+    if action is not None:
+        return "verify"
+
+    return "end"
 
 
 def supervisor_node(state: GraphState):
@@ -466,6 +801,7 @@ def summarize_node(state: GraphState):
     raw_result = state.get("current_execution", "No execution result")
 
     if isinstance(raw_result, dict):
+        execution_id = raw_result.get("execution_id")
         status = raw_result.get("status", "ok" if raw_result.get("success", True) else "failed")
         success = bool(raw_result.get("success", status in ["ok", "warning"]))
         error_code = raw_result.get("error_code")
@@ -473,6 +809,7 @@ def summarize_node(state: GraphState):
         artifacts = raw_result.get("artifacts", []) or []
         payload = raw_result.get("payload", {})
     else:
+        execution_id = None
         status = "failed"
         success = False
         error_code = "NON_STRUCTURED_EXECUTION_RESULT"
@@ -590,6 +927,29 @@ def summarize_node(state: GraphState):
 
         existing_runs = state.get("analysis_runs", []) or []
         updates["analysis_runs"] = existing_runs + [analysis_run]
+
+    # Phase 4: if this execution came from a pending plan step,
+    # mark that PlanStep as completed or failed.
+    current_plan_step_id = state.get("current_plan_step_id")
+    pending_plan = state.get("pending_plan")
+
+    if current_plan_step_id and pending_plan:
+        updated_plan = mark_plan_step_after_execution(
+            pending_plan,
+            step_id=current_plan_step_id,
+            success=success,
+            execution_id=execution_id,
+            message=message,
+        )
+
+        updates["pending_plan"] = updated_plan
+        updates["plan_status"] = updated_plan.get("status")
+        updates["current_plan_step_id"] = None
+
+        print(
+            f"[PLAN EXECUTION] step {current_plan_step_id} "
+            f"marked as {'completed' if success else 'failed'}"
+        )
 
     return updates
 
@@ -870,6 +1230,11 @@ def route_after_deliverable_gate(state: GraphState):
 workflow = StateGraph(GraphState)
 
 workflow.add_node("build_context", build_context_node)
+workflow.add_node("intent_router", intent_router_node)
+workflow.add_node("advisory_answer", advisory_answer_node)
+workflow.add_node("plan_only", plan_only_node)
+workflow.add_node("execute_pending_plan", execute_pending_plan_node)
+
 workflow.add_node("planner", planner_node)
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("verify", verify_node)
@@ -880,7 +1245,40 @@ workflow.add_node("deliverable_gate", deliverable_gate_node)
 
 workflow.set_entry_point("build_context")
 
-# Supervisor loop
+# Step 1: build context, dataset profile, dataset summary, capability map.
+workflow.add_edge("build_context", "intent_router")
+
+# Step 2: route by interaction intent.
+workflow.add_conditional_edges(
+    "intent_router",
+    route_after_intent,
+    {
+        "advisory_answer": "advisory_answer",
+        "plan_only": "plan_only",
+        "execute_pending_plan": "execute_pending_plan",
+
+        # Existing runtime path.
+        "planner": "planner",
+        "supervisor": "supervisor",
+    },
+)
+
+# These modes must never execute tools.
+workflow.add_edge("advisory_answer", END)
+workflow.add_edge("plan_only", END)
+
+workflow.add_conditional_edges(
+    "execute_pending_plan",
+    route_after_execute_pending_plan,
+    {
+        "verify": "verify",
+        "end": END,
+    },
+)
+
+# Existing planner -> supervisor path.
+workflow.add_edge("planner", "supervisor")
+
 workflow.add_conditional_edges(
     "supervisor",
     route_after_supervisor,
@@ -910,39 +1308,27 @@ workflow.add_conditional_edges(
     },
 )
 
-# After build_context: optional planner
-workflow.add_conditional_edges(
-    "build_context",
-    router_gate,
-    {
-        "planner": "planner",
-        "supervisor": "supervisor"
-    }
-)
-
-# Planner hands off to supervisor
-workflow.add_edge("planner", "supervisor")
-
 workflow.add_conditional_edges(
     "human_review",
     route_after_review,
     {
         "execute": "execute",
         "build_context": "build_context",
-    }
+    },
 )
 
 workflow.add_edge("execute", "summarize")
 
-# After summarize, loop back to build_context
 workflow.add_conditional_edges(
     "summarize",
     route_after_summarize,
     {
         "build_context": "build_context",
         "end": END,
-    }
+    },
 )
+
+
 
 # Compile with checkpoint + interrupt
 memory = MemorySaver()

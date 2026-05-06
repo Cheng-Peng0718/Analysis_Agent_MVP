@@ -495,6 +495,7 @@ if (is_new_task and not is_interrupted) or is_resuming:
         live_display = st.empty()
 
         pending_final_answer = None
+        pending_direct_answer = None
         deliverable_gate_status = None
         deliverable_gate_allows_final = False
 
@@ -503,6 +504,29 @@ if (is_new_task and not is_interrupted) or is_resuming:
 
                 if not isinstance(state_data, dict):
                     continue
+
+                # New direct-response protocol:
+                # advisory_answer_node / plan_only_node / execute_pending_plan_node
+                # return {"final_answer": "..."} directly and do not go through
+                # supervisor final_answer or deliverable_gate.
+                if state_data.get("final_answer"):
+                    pending_direct_answer = state_data.get("final_answer")
+
+                # New canonical response protocol.
+                if state_data.get("assistant_response") is not None:
+                    pending_assistant_response = state_data.get("assistant_response")
+
+                if state_data.get("pending_plan") is not None:
+                    st.session_state.pending_plan = state_data.get("pending_plan")
+
+                if state_data.get("plan_status") is not None:
+                    st.session_state.plan_status = state_data.get("plan_status")
+
+                if state_data.get("dataset_summary") is not None:
+                    st.session_state.dataset_summary = state_data.get("dataset_summary")
+
+                if state_data.get("capability_map") is not None:
+                    st.session_state.capability_map = state_data.get("capability_map")
 
                 if state_data.get("data_versions") is not None:
                     st.session_state.data_versions = state_data.get("data_versions")
@@ -600,6 +624,32 @@ if (is_new_task and not is_interrupted) or is_resuming:
         ):
             live_display.empty()
             st.session_state.resume_stream = False
+            st.rerun()
+
+        if pending_direct_answer:
+            live_display.empty()
+            st.markdown(pending_direct_answer)
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": pending_direct_answer,
+            })
+
+            st.rerun()
+
+        if pending_assistant_response:
+            live_display.empty()
+
+            content = pending_assistant_response.get("content", "")
+
+            st.markdown(content)
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": content,
+                "response": pending_assistant_response,
+            })
+
             st.rerun()
 
         if pending_final_answer and deliverable_gate_allows_final:

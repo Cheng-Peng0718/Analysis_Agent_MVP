@@ -25,3 +25,12 @@ class GraphState(TypedDict):
     active_data_version_id: Optional[str]
     data_audit_log: Optional[List[Dict[str, Any]]]
     analysis_runs: Optional[List[Dict[str, Any]]]
+
+    interaction_intent: str
+    dataset_profile_v2: dict
+    dataset_summary: dict
+    capability_map: dict
+    pending_plan: dict
+    plan_status: str
+    final_answer: str
+    assistant_response: dict
