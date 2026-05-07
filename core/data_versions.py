@@ -116,24 +116,36 @@ def find_data_version(data_versions: List[Dict[str, Any]], version_id: str) -> O
 
 def get_active_data_path(
     workspace_dir: str,
-    data_versions: Optional[List[Dict[str, Any]]] = None,
-    active_data_version_id: Optional[str] = None,
+    data_versions: List[Dict[str, Any]] | None = None,
+    active_data_version_id: str | None = None,
     fallback_file: str = "working_data.parquet",
-) -> str:
-    """
-    Resolve active data path.
+) -> str | None:
+    data_versions = data_versions or []
 
-    If active_data_version_id exists, use that version.
-    Otherwise fall back to workspace/working_data.parquet for backward compatibility.
-    """
-    if data_versions and active_data_version_id:
-        version = find_data_version(data_versions, active_data_version_id)
-        if version and version.get("path"):
-            return version["path"]
+    # If an active version is explicitly declared, it must resolve.
+    # Do not silently fall back to working_data.parquet.
+    if active_data_version_id:
+        for version in data_versions:
+            if not isinstance(version, dict):
+                continue
 
-    return os.path.join(workspace_dir, fallback_file)
+            version_id = (
+                version.get("version_id")
+                or version.get("id")
+                or version.get("data_version_id")
+            )
 
-from typing import Any, Dict, Optional
+            if version_id == active_data_version_id:
+                return version.get("path")
+
+        return None
+
+    # Fallback is allowed only when there is no declared active version.
+    if fallback_file:
+        import os
+        return os.path.join(workspace_dir, fallback_file)
+
+    return None
 
 
 def extract_data_version_update(raw_result: Any) -> Optional[Dict[str, Any]]:
