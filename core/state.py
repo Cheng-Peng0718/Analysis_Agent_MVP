@@ -37,3 +37,4 @@ class GraphState(TypedDict):
     assistant_response: dict
     execution_audit: dict
     repair_decision: dict
+    repair_attempts: list
