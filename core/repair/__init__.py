@@ -18,3 +18,4 @@ from core.repair.proposal import (
     make_method_fallback_repair_proposal,
     make_no_op_repair_proposal,
 )
+from core.repair.proposal_generator import generate_repair_proposal
