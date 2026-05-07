@@ -1036,19 +1036,20 @@ def summarize_node(state: GraphState):
 
         print(f"[DATA VERSION] active_data_version_id -> {new_active_id}")
 
-    # Phase 3: append successful tool result to Analysis Results registry.
+    # Phase 3: append every real tool execution to Analysis Results registry.
     # Put this AFTER data_version_update so mutating tools record the new data version.
     #
-    # S12B:
-    # AnalysisRun must be built from the canonical Observation contract,
-    # not from scattered local variables.
-    if status in {"ok", "warning"} and tool_name not in {"unknown_tool"}:
+    # S12C:
+    # AnalysisRun must exist for both successful and failed tool executions.
+    # Failed runs are required evidence for DeliverableGate and future repair logic.
+    if tool_name not in {"unknown_tool"}:
         analysis_run = build_analysis_run_from_observation(
             observation=refined_observation,
         )
 
         existing_runs = state.get("analysis_runs", []) or []
         updates["analysis_runs"] = existing_runs + [analysis_run]
+
 
     # Phase 4: if this execution came from a pending plan step,
     # mark that PlanStep as completed or failed.

@@ -165,3 +165,31 @@ def test_analysis_run_observation_contract_keeps_plugin_summary_separate():
 
     assert run["summary"] == "Canonical summary."
     assert "plugin_summary" in run
+
+def test_analysis_run_failed_observation_still_builds_with_sparse_payload():
+    observation = {
+        "observation_id": "obs_failed_sparse",
+        "tool_name": "run_multiple_regression",
+        "arguments": {
+            "target_col": "GPA",
+            "feature_cols": ["SATM"],
+        },
+        "status": "failed",
+        "success": False,
+        "error_code": "MODEL_FIT_FAILED",
+        "message": "Model fitting failed before producing a payload.",
+        "summary": "Model fitting failed.",
+        "data_version_id": "raw_v1",
+        "artifacts": [],
+        "structured_data": {},
+        "raw_data": {},
+    }
+
+    run = build_analysis_run_from_observation(observation=observation)
+
+    assert run["observation_id"] == "obs_failed_sparse"
+    assert run["tool_name"] == "run_multiple_regression"
+    assert run["status"] == "failed"
+    assert run["success"] is False
+    assert run["error_code"] == "MODEL_FIT_FAILED"
+    assert run["data_version_id"] == "raw_v1"

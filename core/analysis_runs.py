@@ -141,19 +141,25 @@ def build_analysis_run_from_observation(
     if plugin is None:
         plugin = _generic_unified_fallback_plugin(tool_name)
 
-    run = plugin.build_analysis_run(
-        action_id=action_id,
-        arguments=arguments,
-        data_version_id=data_version_id,
-        status=status,
-        success=success,
-        message=message,
-        payload=payload,
-        artifacts=artifacts,
-        observation_id=observation_id,
-    )
-
-    run = _as_dict(run)
+    try:
+        run = plugin.build_analysis_run(
+            action_id=action_id,
+            arguments=arguments,
+            data_version_id=data_version_id,
+            status=status,
+            success=success,
+            message=message,
+            payload=payload,
+            artifacts=artifacts,
+            observation_id=observation_id,
+        )
+        run = _as_dict(run)
+    except Exception as exc:
+        # Failed or malformed tool outputs should still become AnalysisRun records.
+        # The canonical fields below will preserve the real failure status.
+        run = {
+            "analysis_run_renderer_error": str(exc),
+        }
 
     # Canonical AnalysisRun contract fields.
     # These fields must be stable regardless of plugin-specific renderers.
