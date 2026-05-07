@@ -40,3 +40,8 @@ class GraphState(TypedDict):
     repair_attempts: list
     repair_proposal: dict
     state_serialization_audit: dict
+
+    latest_ui_event: dict
+    human_review_action_hash: str
+    human_review_rejection_reason: str
+    selected_plan_step_id: str
