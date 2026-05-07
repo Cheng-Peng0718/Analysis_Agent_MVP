@@ -1,0 +1,1 @@
+from core.ui_adapter.snapshot import build_ui_snapshot
