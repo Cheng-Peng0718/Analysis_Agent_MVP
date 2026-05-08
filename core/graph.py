@@ -1666,6 +1666,15 @@ workflow.add_conditional_edges(
 
 
 
-# Compile with checkpoint + interrupt
-memory = MemorySaver()
-app = workflow.compile(checkpointer=memory, interrupt_before=["human_review"])
+def create_graph_app():
+    """
+    Build the compiled LangGraph app explicitly.
+
+    Importing core.graph should expose node functions and workflow wiring,
+    but should not compile a global runnable app as an import-time side effect.
+    """
+    memory = MemorySaver()
+    return workflow.compile(
+        checkpointer=memory,
+        interrupt_before=["human_review"],
+    )
