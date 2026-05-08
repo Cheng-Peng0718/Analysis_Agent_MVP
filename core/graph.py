@@ -76,6 +76,8 @@ from core.workflow.nodes.finalization import (
 
 from core.workflow.execution_fingerprints import has_duplicate_executed_action
 
+from core.workflow.verification_feedback import attach_verification_blocked_response
+
 def _load_dataframe_for_dataset_intelligence(path: str) -> pd.DataFrame:
     """
     Load the active dataset for Dataset Intelligence.
@@ -293,6 +295,7 @@ def verify_node(state: GraphState):
             }
 
         updates = attach_repair_decision(state, updates)
+        updates = attach_verification_blocked_response(state, updates)
         updates.update(clear_after_repair)
 
         return updates

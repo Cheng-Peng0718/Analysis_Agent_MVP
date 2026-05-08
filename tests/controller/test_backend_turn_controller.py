@@ -10,6 +10,9 @@ from core.ui_adapter.events import (
     make_user_message_event,
 )
 
+from core.controller import backend_turn as backend_turn_module
+from core.schema import ActionProposal
+
 
 def apply_updates(state, updates):
     merged = dict(state)
@@ -342,3 +345,86 @@ def test_backend_turn_controller_does_not_execute_after_plan_choice_update(tmp_p
     assert result["ui_snapshot"]["runtime"]["has_current_action"] is False
 
     json.dumps(result)
+
+def test_backend_turn_exposes_assistant_response_for_verification_rejection(monkeypatch):
+    def fake_intent_router_node(state):
+        return {
+            "interaction_intent": "execute_plan",
+        }
+
+    def fake_execute_pending_plan_node(state):
+        return {
+            "current_action": ActionProposal(
+                action_id="act_clean_bad",
+                action_type="tool_call",
+                tool_name="clean_data",
+                arguments={
+                    "action_type": "drop rows",
+                    "strategy": "drop",
+                },
+                reasoning_summary="Bad clean_data request.",
+            ),
+            "action_origin": "pending_plan",
+            "plan_execution_status": "started_step",
+        }
+
+    def fake_verify(action, profile):
+        return (
+            "rejected_recoverable",
+            "Invalid clean_data arguments.",
+            {
+                "status": "rejected_recoverable",
+                "feedback": "Invalid clean_data arguments.",
+                "error_code": "INVALID_TOOL_ARGUMENTS",
+                "details": {},
+            },
+        )
+
+    monkeypatch.setattr(
+        backend_turn_module,
+        "intent_router_node",
+        fake_intent_router_node,
+    )
+    monkeypatch.setattr(
+        backend_turn_module,
+        "execute_pending_plan_node",
+        fake_execute_pending_plan_node,
+    )
+    monkeypatch.setattr(
+        "core.graph.verify",
+        fake_verify,
+    )
+
+    result = run_backend_turn({
+        "user_request": "run the plan",
+        "workspace_dir": "./",
+        "current_step": 1,
+        "max_steps": 5,
+        "dataset_profile": {
+            "columns": ["GPA"],
+        },
+        "observations": [],
+        "analysis_runs": [],
+        "data_versions": [],
+        "data_audit_log": [],
+        "repair_attempts": [],
+        "active_data_version_id": "raw_v1",
+    })
+
+    assert result["status"] == "blocked"
+
+    response = result["state"]["assistant_response"]
+    assert response["response_type"] == "error"
+    assert response["metadata"]["semantic_type"] == "verification_blocked"
+    assert "INVALID_TOOL_ARGUMENTS" in response["content"]
+
+    snapshot = result["ui_snapshot"]
+
+    assert snapshot["assistant_response"]["response_type"] == "error"
+    assert snapshot["assistant_response"]["metadata"]["semantic_type"] == "verification_blocked"
+    assert snapshot["repair"]["decision"]["status"] in {
+        "repairable",
+        "needs_user",
+        "terminal",
+    }
+    assert snapshot["runtime"]["current_verification"]["status"] == "rejected_recoverable"

@@ -52,6 +52,11 @@ def test_verify_node_attaches_repair_state_for_recoverable_verification_failure(
     assert updates["repair_proposal"]["source_tool_name"] == "clean_data"
     assert updates["repair_proposal"]["source_action_id"] == "act_clean_bad"
 
+    assert "assistant_response" in updates
+    assert updates["assistant_response"]["response_type"] == "error"
+    assert updates["assistant_response"]["metadata"]["semantic_type"] == "verification_blocked"
+    assert "clean_data" in updates["assistant_response"]["content"]
+    assert "INVALID_TOOL_ARGUMENTS" in updates["assistant_response"]["content"]
 
 def test_verify_node_attaches_terminal_repair_state_for_terminal_verification_failure(monkeypatch):
     action = ActionProposal(
@@ -94,3 +99,9 @@ def test_verify_node_attaches_terminal_repair_state_for_terminal_verification_fa
 
     assert "repair_proposal" in updates
     assert updates["repair_proposal"]["proposal_type"] == "no_op"
+
+    assert "assistant_response" in updates
+    assert updates["assistant_response"]["response_type"] == "error"
+    assert updates["assistant_response"]["metadata"]["semantic_type"] == "verification_blocked"
+    assert "unknown_tool" in updates["assistant_response"]["content"]
+    assert "UNKNOWN_TOOL" in updates["assistant_response"]["content"]
