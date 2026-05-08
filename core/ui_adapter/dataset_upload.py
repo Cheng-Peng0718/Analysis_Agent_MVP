@@ -9,6 +9,7 @@ from core.data_versions import (
     create_initial_data_version,
     make_audit_event,
 )
+from core.responses import make_assistant_response
 
 
 def _semantic_type_for_series(series: pd.Series) -> str:
@@ -376,15 +377,16 @@ def prepare_uploaded_dataset_state(
         "deliverable_check": None,
         "execution_audit": None,
         "state_serialization_audit": None,
-        "assistant_response": {
-            "response_type": "dataset_loaded",
-            "content": (
+        "assistant_response": make_assistant_response(
+            response_type="dataset_loaded",
+            content=(
                 f"Dataset `{filename or 'uploaded dataset'}` loaded successfully "
                 f"with {len(df)} rows and {len(df.columns)} columns."
             ),
-            "source_node": "dataset_upload",
-            "metadata": {
+            source_node="dataset_upload",
+            data_version_id=active_data_version_id,
+            metadata={
                 "active_data_version_id": active_data_version_id,
             },
-        },
+        ),
     }

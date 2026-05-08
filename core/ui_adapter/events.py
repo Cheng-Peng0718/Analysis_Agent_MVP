@@ -4,6 +4,7 @@ import uuid
 from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
+from core.responses import make_assistant_response
 
 
 UI_EVENT_SCHEMA_VERSION = "ui_event_v1"
@@ -333,17 +334,19 @@ def apply_ui_event_to_state(state: Any, event: Any) -> Dict[str, Any]:
         return {
             "pending_plan": updated_plan,
             "latest_ui_event": event_dict,
-            "assistant_response": {
-                "response_type": "plan_step_choices_updated",
-                "content": (
+            "assistant_response": make_assistant_response(
+                response_type="plan_step_choices_updated",
+                content=(
                     "Plan step choices were updated. "
                     "You can click Run plan to continue."
                 ),
-                "source_node": "ui_event_adapter",
-                "metadata": {
+                source_node="ui_event_adapter",
+                plan_id=updated_plan.get("plan_id"),
+                plan_status=updated_plan.get("status"),
+                metadata={
                     "step_id": step_id,
                 },
-            },
+            ),
         }
 
     if event_type == "clear_runtime":

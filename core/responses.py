@@ -4,20 +4,24 @@ import uuid
 from typing import Any, Dict, List, Optional
 from typing import Literal
 
+AssistantResponseType = Literal[
+    "dataset_loaded",
+    "advisory",
+    "plan",
+    "plan_step_choices_updated",
+    "plan_execution_status",
+    "final_answer",
+    "clarification",
+    "error",
+]
+
 from pydantic import BaseModel, Field
 
 
 class AssistantResponse(BaseModel):
     response_id: str = Field(default_factory=lambda: f"resp_{uuid.uuid4().hex[:8]}")
 
-    response_type: Literal[
-        "advisory",
-        "plan",
-        "plan_execution_status",
-        "final_answer",
-        "clarification",
-        "error",
-    ]
+    response_type: AssistantResponseType
 
     content: str
     source_node: str
@@ -32,7 +36,7 @@ class AssistantResponse(BaseModel):
 
 def make_assistant_response(
     *,
-    response_type: str,
+    response_type: AssistantResponseType,
     content: str,
     source_node: str,
     data_version_id: Optional[str] = None,
@@ -56,7 +60,7 @@ def make_assistant_response(
 
 def make_response_update(
     *,
-    response_type: str,
+    response_type: AssistantResponseType,
     content: str,
     source_node: str,
     data_version_id: Optional[str] = None,
