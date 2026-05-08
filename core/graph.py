@@ -17,7 +17,6 @@ from core.data_versions import (
 )
 from core.dataset_intelligence.profiler import profile_dataframe, summarize_profile
 from core.dataset_intelligence.capability_map import build_capability_map
-from core.interaction_intent import classify_interaction_intent
 from core.dataset_intelligence.schemas import CapabilityMap, DatasetProfileV2
 from core.planning.planner import build_plan_from_capability_map
 from core.planning.verifier import verify_plan
@@ -62,6 +61,11 @@ from core.workflow.repair_runtime import (
 )
 
 from core.workflow.runtime_utils import sanitize_results, get_action_hash
+
+from core.workflow.nodes.interaction import (
+    intent_router_node,
+    advisory_answer_node,
+)
 
 def _load_dataframe_for_dataset_intelligence(path: str) -> pd.DataFrame:
     """
@@ -151,104 +155,6 @@ def build_context_node(state: GraphState):
         "dataset_summary": dataset_summary.model_dump(),
         "capability_map": capability_map.model_dump(),
     }
-
-def intent_router_node(state: GraphState):
-    user_request = state.get("user_request", "")
-    intent = classify_interaction_intent(user_request)
-
-    print("\n" + "=" * 40)
-    print("[INTENT ROUTER]")
-    print(f"user_request = {user_request}")
-    print(f"intent = {intent.value}")
-    print("=" * 40 + "\n")
-
-    return {
-        "interaction_intent": intent.value,
-    }
-
-def advisory_answer_node(state: GraphState):
-    summary = state.get("dataset_summary") or {}
-    capability_map = state.get("capability_map") or {}
-
-    n_rows = summary.get("n_rows", "unknown")
-    n_cols = summary.get("n_cols", "unknown")
-
-    numeric_cols = summary.get("numeric_columns", []) or []
-    categorical_cols = summary.get("categorical_columns", []) or []
-    binary_cols = summary.get("binary_columns", []) or []
-    id_like_cols = summary.get("id_like_columns", []) or []
-    missingness = summary.get("missingness_summary", {}) or {}
-
-    capabilities = capability_map.get("capabilities", []) or []
-
-    ready = [c for c in capabilities if c.get("status") == "ready"]
-    needs_choice = [c for c in capabilities if c.get("status") == "needs_user_choice"]
-    not_applicable = [
-        c for c in capabilities
-        if c.get("status") in {"not_applicable", "blocked"}
-    ]
-
-    lines = []
-
-    lines.append("I have profiled the current dataset. Here is what you can do next.")
-    lines.append("")
-    lines.append("Dataset overview:")
-    lines.append(f"- Rows: {n_rows}")
-    lines.append(f"- Columns: {n_cols}")
-    lines.append(f"- Numeric columns: {len(numeric_cols)}")
-    lines.append(f"- Categorical columns: {len(categorical_cols)}")
-    lines.append(f"- Binary columns: {len(binary_cols)}")
-    lines.append(f"- ID-like columns: {len(id_like_cols)}")
-    lines.append(
-        f"- Columns with missing values: "
-        f"{missingness.get('n_columns_with_missing', 0)}"
-    )
-    lines.append("")
-
-    if ready:
-        lines.append("Analyses that appear ready:")
-        for cap in ready[:8]:
-            lines.append(f"- {cap.get('display_name', cap.get('tool_name'))}: {cap.get('reason')}")
-        lines.append("")
-
-    if needs_choice:
-        lines.append("Analyses that may be useful but need your choices first:")
-        for cap in needs_choice[:8]:
-            choices = ", ".join(cap.get("required_user_choices", []) or [])
-            lines.append(
-                f"- {cap.get('display_name', cap.get('tool_name'))}: "
-                f"needs {choices or 'additional choices'}"
-            )
-        lines.append("")
-
-    if not_applicable:
-        lines.append("Currently blocked or not recommended:")
-        for cap in not_applicable[:5]:
-            lines.append(f"- {cap.get('display_name', cap.get('tool_name'))}: {cap.get('reason')}")
-        lines.append("")
-
-    lines.append("I have not run any analysis tools yet.")
-    lines.append("If you want, say `make a plan` and I will draft a data-aware plan without executing it.")
-
-    answer = "\n".join(lines)
-
-    updates = make_response_update(
-        response_type="advisory",
-        content=answer,
-        source_node="advisory_answer",
-        data_version_id=state.get("active_data_version_id"),
-        metadata={
-            "interaction_intent": state.get("interaction_intent"),
-        },
-    )
-
-    updates.update({
-        "current_action": None,
-        "current_execution": None,
-        "current_verification": None,
-    })
-
-    return updates
 
 def plan_only_node(state: GraphState):
     capability_map_dict = state.get("capability_map")
