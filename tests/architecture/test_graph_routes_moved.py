@@ -18,6 +18,7 @@ def test_basic_routes_live_outside_core_graph():
         "def route_after_supervisor",
         "def route_after_verify",
         "def route_after_review",
+        "def route_after_summarize",
     ]
 
     for forbidden in forbidden_defs:
@@ -29,6 +30,7 @@ def test_basic_routes_live_outside_core_graph():
         "def route_after_supervisor",
         "def route_after_verify",
         "def route_after_review",
+        "def route_after_summarize",
     ]
 
     for required in required_defs:
@@ -47,3 +49,4 @@ def test_core_graph_imports_basic_routes_from_workflow_routes():
     assert "route_after_supervisor" in graph_text
     assert "route_after_verify" in graph_text
     assert "route_after_review" in graph_text
+    assert "route_after_summarize" in graph_text

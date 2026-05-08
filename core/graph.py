@@ -63,6 +63,7 @@ from core.workflow.routes import (
     route_after_supervisor,
     route_after_verify,
     route_after_review,
+    route_after_summarize,
 )
 
 from core.workflow.nodes.plan_execution import execute_pending_plan_node
@@ -749,43 +750,6 @@ def final_response_node(state: GraphState):
     return updates
 
 # --- Routing ---
-def route_after_summarize(state: GraphState):
-    # S4: a single "run the plan" turn executes at most one PlanStep.
-    # If the action came from pending_plan, stop after summarize.
-    if state.get("action_origin") == "pending_plan":
-        return "end"
-
-    if state.get("current_step", 0) >= state.get("max_steps", 12):
-        return "end"
-
-    observations = state.get("observations", []) or []
-    last_obs = observations[-1] if observations else {}
-
-    status = last_obs.get("status") if isinstance(last_obs, dict) else None
-    error_code = last_obs.get("error_code") if isinstance(last_obs, dict) else None
-
-    raw_data = last_obs.get("raw_data", {}) if isinstance(last_obs, dict) else {}
-    recoverable = False
-
-    if isinstance(raw_data, dict):
-        recoverable = bool(raw_data.get("recoverable", False))
-
-    # Successful or warning result: continue normal loop.
-    if status in {"ok", "warning"}:
-        return "build_context"
-
-    # Human confirmation required is an interrupt/review state, not a tool failure.
-    if error_code == "HUMAN_CONFIRMATION_REQUIRED":
-        return "end"
-
-    # Recoverable tool/schema failures can go back once or twice.
-    # For now, use max_steps as the safety brake.
-    if status in {"blocked", "failed", "rejected"} and recoverable:
-        return "build_context"
-
-    # Non-recoverable failures should stop and let final answer/report explain blocker.
-    return "end"
-
 def deliverable_gate_node(state: GraphState):
     result = evaluate_deliverable_gate_state(state)
 

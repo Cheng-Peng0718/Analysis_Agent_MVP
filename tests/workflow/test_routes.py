@@ -4,8 +4,8 @@ from core.workflow.routes import (
     route_after_supervisor,
     route_after_verify,
     route_after_review,
+    route_after_summarize,
 )
-
 
 def test_route_after_intent_routes_advisory():
     assert route_after_intent({"interaction_intent": "advisory"}) == "advisory_answer"
@@ -188,3 +188,105 @@ def test_route_after_review_routes_needs_review_to_build_context():
             "details": {},
         }
     }) == "build_context"
+
+def test_route_after_summarize_ends_for_pending_plan_action():
+    assert route_after_summarize({
+        "action_origin": "pending_plan",
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "ok",
+            }
+        ],
+    }) == "end"
+
+
+def test_route_after_summarize_ends_at_max_steps():
+    assert route_after_summarize({
+        "current_step": 12,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "ok",
+            }
+        ],
+    }) == "end"
+
+
+def test_route_after_summarize_routes_success_to_build_context():
+    assert route_after_summarize({
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "ok",
+            }
+        ],
+    }) == "build_context"
+
+
+def test_route_after_summarize_routes_warning_to_build_context():
+    assert route_after_summarize({
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "warning",
+            }
+        ],
+    }) == "build_context"
+
+
+def test_route_after_summarize_ends_for_human_confirmation_required():
+    assert route_after_summarize({
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "rejected",
+                "error_code": "HUMAN_CONFIRMATION_REQUIRED",
+                "raw_data": {
+                    "recoverable": True,
+                },
+            }
+        ],
+    }) == "end"
+
+
+def test_route_after_summarize_routes_recoverable_failure_to_build_context():
+    assert route_after_summarize({
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "failed",
+                "raw_data": {
+                    "recoverable": True,
+                },
+            }
+        ],
+    }) == "build_context"
+
+
+def test_route_after_summarize_ends_for_nonrecoverable_failure():
+    assert route_after_summarize({
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [
+            {
+                "status": "failed",
+                "raw_data": {
+                    "recoverable": False,
+                },
+            }
+        ],
+    }) == "end"
+
+
+def test_route_after_summarize_ends_without_observations():
+    assert route_after_summarize({
+        "current_step": 1,
+        "max_steps": 12,
+        "observations": [],
+    }) == "end"
