@@ -21,17 +21,19 @@ def test_backend_final_response_uses_assistant_response():
 
 
 def test_new_backend_response_nodes_do_not_return_final_answer_directly():
-    graph_text = Path("core/graph.py").read_text(encoding="utf-8")
+    node_locations = {
+        "advisory_answer_node": Path("core/workflow/nodes/interaction.py"),
+        "plan_only_node": Path("core/workflow/nodes/planning.py"),
+        "execute_pending_plan_node": Path("core/workflow/nodes/plan_execution.py"),
+    }
 
-    for fn_name in [
-        "advisory_answer_node",
-        "plan_only_node",
-        "execute_pending_plan_node",
-    ]:
-        start = graph_text.index(f"def {fn_name}")
-        rest = graph_text[start + 1:]
+    for fn_name, path in node_locations.items():
+        text = path.read_text(encoding="utf-8")
+
+        start = text.index(f"def {fn_name}")
+        rest = text[start + 1:]
         next_def_offset = rest.find("\ndef ")
-        body = graph_text[start:] if next_def_offset == -1 else graph_text[start:start + 1 + next_def_offset]
+        body = text[start:] if next_def_offset == -1 else text[start:start + 1 + next_def_offset]
 
         assert '"final_answer"' not in body
         assert "'final_answer'" not in body
