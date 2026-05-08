@@ -118,14 +118,24 @@ def test_route_after_verify_routes_needs_review_to_human_review():
     }) == "human_review"
 
 
-def test_route_after_verify_routes_rejected_to_build_context():
+def test_route_after_verify_routes_rejected_recoverable_to_end():
     assert route_after_verify({
         "current_verification": {
             "status": "rejected_recoverable",
             "feedback": "missing arguments",
             "details": {},
         }
-    }) == "build_context"
+    }) == "end"
+
+
+def test_route_after_verify_routes_rejected_terminal_to_end():
+    assert route_after_verify({
+        "current_verification": {
+            "status": "rejected_terminal",
+            "feedback": "terminal failure",
+            "details": {},
+        }
+    }) == "end"
 
 
 def test_route_after_verify_routes_missing_verification_to_build_context():

@@ -52,7 +52,7 @@ def route_after_verify(state: dict):
     After verification:
     - allowed: execute the tool
     - needs_review: interrupt before human_review and wait for user approval
-    - rejected_*: do not execute; go back to build_context so Supervisor can rethink/respond
+    - rejected_*: stop this turn; repair state/proposal should explain next step
     """
 
     # If a pending-plan action fails verification, do not loop back and continue
@@ -87,7 +87,7 @@ def route_after_verify(state: dict):
         return "human_review"
 
     if status in {"rejected_recoverable", "rejected_terminal"}:
-        return "build_context"
+        return "end"
 
     return "build_context"
 
