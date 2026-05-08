@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict
 
 import pandas as pd
 import streamlit as st
+from core.ui_adapter.insight_cards import build_insight_card_from_run
 
 
 def _latest_run(snapshot: Dict[str, Any]) -> Dict[str, Any] | None:
@@ -193,25 +194,30 @@ def render_human_review_focus(snapshot: Dict[str, Any]) -> None:
 
 def render_latest_result(snapshot: Dict[str, Any], *, failed: bool = False) -> None:
     run = _latest_run(snapshot) or {}
+    card = build_insight_card_from_run(run)
 
     if failed:
         st.error("Latest analysis run failed.")
     else:
         st.success("Latest analysis run completed.")
 
-    st.write(f"**Tool:** `{run.get('tool_name')}`")
-    st.write(f"**Status:** `{run.get('status')}`")
-    st.write(f"**Success:** `{run.get('success')}`")
+    st.write(f"**{card['title']}**")
+    st.caption(f"Tool: `{card['tool_name']}` · Status: `{card['status']}`")
 
-    error_code = run.get("error_code")
-    if error_code:
-        st.error(f"Error code: `{error_code}`")
+    st.markdown("**What was computed**")
+    st.write(card["what_was_computed"])
 
-    summary = run.get("summary") or run.get("message")
-    if summary:
-        st.write(summary)
-    else:
-        st.info("No summary available.")
+    st.markdown("**Key findings**")
+    for item in card["key_findings"]:
+        st.write(f"- {item}")
+
+    st.markdown("**Caveats**")
+    for item in card["caveats"]:
+        st.write(f"- {item}")
+
+    st.markdown("**Recommended next steps**")
+    for item in card["recommended_next_steps"]:
+        st.write(f"- {item}")
 
     with st.expander("Run details", expanded=False):
         st.json(run)

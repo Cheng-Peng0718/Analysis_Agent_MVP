@@ -181,3 +181,41 @@ def test_app_v3_action_bar_is_sticky():
     assert ".app-v3-action-bar" in text
     assert "position: sticky" in text
     assert "bottom: 0" in text
+
+def test_app_v3_active_workspace_uses_insight_cards():
+    text = Path("ui/components/active_workspace.py").read_text(encoding="utf-8")
+
+    assert "build_insight_card_from_run" in text
+    assert "What was computed" in text
+    assert "Key findings" in text
+    assert "Caveats" in text
+    assert "Recommended next steps" in text
+
+def test_insight_cards_builder_does_not_branch_on_tool_names():
+    text = Path("core/ui_adapter/insight_cards.py").read_text(
+        encoding="utf-8"
+    )
+
+    forbidden_fragments = [
+        "if tool_name ==",
+        "elif tool_name ==",
+        "match tool_name",
+    ]
+
+    offenders = [
+        item
+        for item in forbidden_fragments
+        if item in text
+    ]
+
+    assert offenders == []
+
+
+def test_insight_cards_use_insight_spec_registry():
+    text = Path("core/ui_adapter/insight_cards.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "get_insight_spec" in text
+    assert "spec.display_name" in text
+    assert "spec.recommended_next_steps" in text

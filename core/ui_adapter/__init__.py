@@ -16,5 +16,10 @@ from core.ui_adapter.events import (
     make_user_message_event,
     normalize_ui_event,
 )
+from core.ui_adapter.insight_cards import (
+    build_insight_card_from_run,
+    build_insight_cards_from_state,
+    build_latest_insight_card_from_state,
+)
 from core.ui_adapter.snapshot import build_ui_snapshot
 from core.ui_adapter.report_export import build_report_package_from_state
