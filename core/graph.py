@@ -55,6 +55,9 @@ from core.action_access import (
     has_action_tool_name,
 )
 
+from core.action_codec import action_to_state_dict
+from core.verification_codec import verification_to_state_dict
+
 from core.verification_access import (
     get_verification_details,
     get_verification_error_code,
@@ -956,6 +959,10 @@ def human_review_node(state: GraphState):
     vr_status = get_verification_status(vr)
     feedback = get_verification_feedback(vr)
 
+    action_id = get_action_id(action)
+    action_payload = action_to_state_dict(action)
+    verification_payload = verification_to_state_dict(vr)
+
     canonical_arguments = vr_details.get("canonical_arguments") or arguments
 
     human_review_decision = state.get("human_review_decision")
@@ -1014,7 +1021,7 @@ def human_review_node(state: GraphState):
     if vr_status == "needs_review":
         obs = Observation(
             observation_id=f"obs_{uuid.uuid4().hex[:8]}",
-            source_action_id=action.action_id,
+            source_action_id=action_id,
             tool_name=tool_name,
             arguments=arguments,
             status="rejected",
@@ -1031,17 +1038,17 @@ def human_review_node(state: GraphState):
                 "success": False,
                 "error_code": "HUMAN_CONFIRMATION_REQUIRED",
                 "message": feedback,
-                "pending_action": action.model_dump() if hasattr(action, "model_dump") else {},
+                "pending_action": action_payload or {},
             },
             raw_data={
-                "verification": vr.model_dump() if hasattr(vr, "model_dump") else {},
-                "pending_action": action.model_dump() if hasattr(action, "model_dump") else {},
+                "verification": verification_payload or {},
+                "pending_action": action_payload or {},
             },
         )
 
         return {
             "human_review_required": True,
-            "pending_action": action.model_dump() if hasattr(action, "model_dump") else action,
+            "pending_action": action_payload,
             "observations": [obs.model_dump()],
         }
 
@@ -1049,7 +1056,7 @@ def human_review_node(state: GraphState):
     if vr_status in {"rejected_recoverable", "rejected_terminal"}:
         obs = Observation(
             observation_id=f"obs_{uuid.uuid4().hex[:8]}",
-            source_action_id=action.action_id,
+            source_action_id=action_id,
             tool_name=tool_name,
             arguments=arguments,
             status="rejected",
@@ -1065,7 +1072,7 @@ def human_review_node(state: GraphState):
                 "message": feedback,
             },
             raw_data={
-                "verification": vr.model_dump() if hasattr(vr, "model_dump") else {},
+                "verification": verification_payload or {},
             },
         )
 
@@ -1075,7 +1082,7 @@ def human_review_node(state: GraphState):
     # Safety fallback
     obs = Observation(
         observation_id=f"obs_{uuid.uuid4().hex[:8]}",
-        source_action_id=action.action_id,
+        source_action_id=action_id,
         tool_name=tool_name,
         arguments=arguments,
         status="rejected",
@@ -1090,7 +1097,7 @@ def human_review_node(state: GraphState):
             "error_code": "UNHANDLED_HUMAN_REVIEW_STATUS",
         },
         raw_data={
-            "verification": vr.model_dump() if hasattr(vr, "model_dump") else {},
+            "verification": verification_payload or {},
         },
     )
 
