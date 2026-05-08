@@ -74,6 +74,8 @@ from core.workflow.nodes.finalization import (
     final_response_node,
 )
 
+from core.workflow.execution_fingerprints import has_duplicate_executed_action
+
 def _load_dataframe_for_dataset_intelligence(path: str) -> pd.DataFrame:
     """
     Load the active dataset for Dataset Intelligence.
@@ -482,30 +484,62 @@ def execute_node(state: GraphState):
     arguments = get_action_arguments(action)
 
     if not action or not tool_name:
-        return {"current_execution": "Error: No valid action provided."}
+        message = "Error: No valid action provided."
 
-    # 1. Current action fingerprint
-    current_hash = get_action_hash(tool_name, arguments)
+        return {
+            "current_execution": execution_to_state_dict(
+                {
+                    "status": "blocked",
+                    "success": False,
+                    "error_code": "NO_VALID_ACTION",
+                    "message": message,
+                    "artifacts": [],
+                    "payload": {},
+                },
+                fallback_action_id=get_action_id(action),
+                fallback_tool_name=tool_name or "unknown_tool",
+            )
+        }
 
-    # 2. Fingerprints from prior observations
-    executed_hashes = []
-    for obs in state.get("observations", []):
-        if isinstance(obs, dict) and obs.get('tool_name'):
-            # Legacy observations without arguments default to {}
-            obs_args = obs.get('arguments', {})
-            executed_hashes.append(get_action_hash(obs['tool_name'], obs_args))
+    if has_duplicate_executed_action(
+        state=state,
+        tool_name=tool_name,
+        arguments=arguments,
+    ):
+        current_hash = get_action_hash(tool_name, arguments)
 
-    # 3. Fingerprint gate: block identical parameters
-    if current_hash in executed_hashes:
         error_msg = (
-            f"[System intervention]: 🚫 Execution refused. You are calling '{tool_name}' "
-            f"with parameters identical to a previous attempt.\n"
-            f"To retry, change arguments (e.g. add .dropna() in chart code or change cleaning strategy)."
+            f"[System intervention]: Execution refused. You are calling '{tool_name}' "
+            f"with parameters identical to a previous executed attempt.\n"
+            f"To retry, change arguments or explicitly choose a different strategy."
         )
-        print(f"[Fingerprint gate]: blocked duplicate {tool_name} (fp: {current_hash[:6]})")
-        return {"current_execution": error_msg}
+
+        print(
+            f"[Fingerprint gate]: blocked duplicate executed action "
+            f"{tool_name} (fp: {current_hash[:6]})"
+        )
+
+        return {
+            "current_execution": execution_to_state_dict(
+                {
+                    "status": "blocked",
+                    "success": False,
+                    "error_code": "DUPLICATE_EXECUTION_ATTEMPT",
+                    "message": error_msg,
+                    "artifacts": [],
+                    "payload": {
+                        "tool_name": tool_name,
+                        "arguments": arguments,
+                        "action_hash": current_hash,
+                    },
+                },
+                fallback_action_id=get_action_id(action),
+                fallback_tool_name=tool_name,
+            )
+        }
 
     print(f"[Execute]: {tool_name}")
+
     context_pkg = build_context(
         step=state.get("current_step", 1),
         max_steps=state.get("max_steps", 20),
@@ -521,9 +555,9 @@ def execute_node(state: GraphState):
 
     exec_result = execute_analysis_tool(action, context_pkg)
 
-    if hasattr(exec_result, 'model_dump'):
+    if hasattr(exec_result, "model_dump"):
         raw_payload = exec_result.model_dump()
-    elif hasattr(exec_result, 'dict'):
+    elif hasattr(exec_result, "dict"):
         raw_payload = exec_result.dict()
     else:
         raw_payload = exec_result
