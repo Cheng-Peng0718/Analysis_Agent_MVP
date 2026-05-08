@@ -7,7 +7,6 @@ import pandas as pd
 from core.state import GraphState
 from core.schema import Observation
 from core.context_builder import build_context, generate_profile
-from agents.supervisor import call_supervisor
 from core.analysis_tool_plugins.execution import execute_analysis_tool
 from core.analysis_runs import build_analysis_run_from_observation
 from core.data_versions import (
@@ -26,7 +25,6 @@ from core.deliverables.evidence import extract_final_answer_content_from_state
 from core.action_access import (
     get_action_arguments,
     get_action_id,
-    get_action_reasoning_summary,
     get_action_tool_name,
     get_action_type,
     has_action_tool_name,
@@ -66,6 +64,8 @@ from core.workflow.routes import (
 )
 
 from core.workflow.nodes.plan_execution import execute_pending_plan_node
+
+from core.workflow.nodes.supervisor import supervisor_node
 
 def _load_dataframe_for_dataset_intelligence(path: str) -> pd.DataFrame:
     """
@@ -155,53 +155,6 @@ def build_context_node(state: GraphState):
         "dataset_summary": dataset_summary.model_dump(),
         "capability_map": capability_map.model_dump(),
     }
-
-
-def supervisor_node(state: GraphState):
-    current_workspace = state.get("workspace_dir", "./")
-    current_profile = state.get("dataset_profile")
-
-    context_pkg = build_context(
-        step=state.get("current_step", 1),
-        max_steps=state.get("max_steps", 12),
-        user_request=state.get("user_request", "Not provided"),
-        profile=current_profile,
-        observations=state.get("observations", []),
-        workspace_dir=current_workspace,
-        deliverable_check=state.get("deliverable_check"),
-        data_versions=state.get("data_versions", []),
-        active_data_version_id=state.get("active_data_version_id"),
-        data_audit_log=state.get("data_audit_log", []),
-    )
-
-    action = call_supervisor(context_pkg)
-    updates = {"current_action": action}
-
-    print("\n" + "=" * 40)
-    print(f"[Supervisor decision]: action_type = {get_action_type(action)}")
-    print(f"[Reasoning summary]: {get_action_reasoning_summary(action)}")
-    print("=" * 40 + "\n")
-
-    contract = getattr(action, "task_contract", None)
-    if contract is not None:
-        if hasattr(contract, "model_dump"):
-            contract_dict = contract.model_dump()
-        elif isinstance(contract, dict):
-            contract_dict = contract
-        else:
-            contract_dict = {}
-
-        print(
-            f"[TASK CONTRACT DECLARED] "
-            f"deliverables={len(contract_dict.get('required_deliverables', []))}"
-        )
-
-        updates["task_contract"] = contract_dict
-
-    return updates
-
-
-
 
 def verify_node(state: GraphState):
     """
