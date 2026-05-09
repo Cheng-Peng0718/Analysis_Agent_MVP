@@ -22,10 +22,9 @@ def test_core_graph_imports_execute_pending_plan_node_from_workflow_nodes():
         errors="ignore",
     )
 
-    assert (
-        "from core.workflow.nodes.plan_execution import execute_pending_plan_node"
-        in graph_text
-    )
+    assert "from core.workflow.nodes.plan_execution import" in graph_text
+    assert "execute_pending_plan_node as _execute_pending_plan_node" in graph_text
+    assert "def execute_pending_plan_node" not in graph_text
 
     forbidden_imports = [
         "find_next_executable_step",

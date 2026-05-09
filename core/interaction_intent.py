@@ -21,6 +21,23 @@ ADVISORY_PATTERNS = [
     "i want to analyze this dataset",
     "what are my options",
     "what would you suggest",
+
+    # Dataset overview / advisory questions.
+    "what does the data look like",
+    "what does this data look like",
+    "what is the data like",
+    "what is this dataset like",
+    "show me the data",
+    "show me the dataset",
+    "show me an overview",
+    "give me an overview",
+    "dataset overview",
+    "data overview",
+    "summarize the dataset",
+    "describe the dataset",
+    "what columns do i have",
+    "what columns are in this data",
+    "what variables do i have",
 ]
 
 PLAN_ONLY_PATTERNS = [

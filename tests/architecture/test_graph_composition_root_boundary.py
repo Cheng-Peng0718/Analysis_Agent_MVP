@@ -64,19 +64,24 @@ def test_core_graph_imports_all_nodes_from_workflow_modules():
         errors="ignore",
     )
 
-    required_imports = [
-        "from core.workflow.nodes.context import build_context_node",
+    required_fragments = [
+        "from core.workflow.nodes.context import build_context_node as _build_context_node",
         "from core.workflow.nodes.interaction import",
-        "from core.workflow.nodes.planning import plan_only_node",
-        "from core.workflow.nodes.plan_execution import execute_pending_plan_node",
-        "from core.workflow.nodes.supervisor import supervisor_node",
-        "from core.workflow.nodes.verification import verify_node",
-        "from core.workflow.nodes.human_review import human_review_node",
-        "from core.workflow.nodes.execution import execute_node",
-        "from core.workflow.nodes.summarization import summarize_node",
+        "intent_router_node as _intent_router_node",
+        "advisory_answer_node as _advisory_answer_node",
+        "from core.workflow.nodes.planning import plan_only_node as _plan_only_node",
+        "from core.workflow.nodes.plan_execution import",
+        "execute_pending_plan_node as _execute_pending_plan_node",
+        "from core.workflow.nodes.supervisor import supervisor_node as _supervisor_node",
+        "from core.workflow.nodes.verification import verify_node as _verify_node",
+        "from core.workflow.nodes.human_review import human_review_node as _human_review_node",
+        "from core.workflow.nodes.execution import execute_node as _execute_node",
+        "from core.workflow.nodes.summarization import summarize_node as _summarize_node",
         "from core.workflow.nodes.finalization import",
+        "deliverable_gate_node as _deliverable_gate_node",
+        "final_response_node as _final_response_node",
         "from core.workflow.routes import",
     ]
 
-    for required in required_imports:
+    for required in required_fragments:
         assert required in graph_text
