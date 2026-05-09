@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from core.graph import _attach_repair_decision, summarize_node
-
+from core.graph import summarize_node
+from core.workflow.repair_runtime import attach_repair_decision
 
 def make_action(
     *,
@@ -33,7 +33,7 @@ def test_attach_repair_decision_records_recoverable_verification_failure():
         }
     }
 
-    result = _attach_repair_decision(state, updates)
+    result = attach_repair_decision(state, updates)
 
     assert "repair_decision" in result
     assert result["repair_decision"]["status"] in {"repairable", "needs_user"}
@@ -61,7 +61,7 @@ def test_attach_repair_decision_records_terminal_execution_failure():
         }
     }
 
-    result = _attach_repair_decision(state, updates)
+    result = attach_repair_decision(state, updates)
 
     assert "repair_decision" in result
     assert result["repair_decision"]["status"] == "terminal"

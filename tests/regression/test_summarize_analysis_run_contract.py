@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_summarize_node_builds_analysis_run_from_observation_contract():
-    graph_text = Path("core/graph.py").read_text(encoding="utf-8")
+    graph_text = Path("core/workflow/nodes/summarization.py").read_text(encoding="utf-8")
 
     start = graph_text.index("def summarize_node")
     rest = graph_text[start + 1:]

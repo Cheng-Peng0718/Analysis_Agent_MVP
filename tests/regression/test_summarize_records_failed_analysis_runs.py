@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_summarize_node_records_failed_tool_runs_as_analysis_runs():
-    graph_text = Path("core/graph.py").read_text(encoding="utf-8")
+    graph_text = Path("core/workflow/nodes/summarization.py").read_text(encoding="utf-8")
 
     start = graph_text.index("def summarize_node")
     rest = graph_text[start + 1:]

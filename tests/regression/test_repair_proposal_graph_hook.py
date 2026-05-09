@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
-from core.graph import _attach_repair_decision, summarize_node
+from core.graph import summarize_node
 
+from core.workflow.repair_runtime import attach_repair_decision
 
 def make_action(
     *,
@@ -39,7 +40,7 @@ def test_attach_repair_decision_creates_argument_repair_proposal():
         }
     }
 
-    result = _attach_repair_decision(state, updates)
+    result = attach_repair_decision(state, updates)
 
     assert "repair_decision" in result
     assert result["repair_decision"]["status"] in {"repairable", "needs_user"}
@@ -78,7 +79,7 @@ def test_attach_repair_decision_creates_no_op_proposal_for_terminal_failure():
         }
     }
 
-    result = _attach_repair_decision(state, updates)
+    result = attach_repair_decision(state, updates)
 
     assert "repair_decision" in result
     assert result["repair_decision"]["status"] == "terminal"
@@ -156,7 +157,7 @@ def test_no_repair_needed_does_not_create_repair_proposal():
         },
     }
 
-    result = _attach_repair_decision(state, updates)
+    result = attach_repair_decision(state, updates)
 
     assert result["repair_decision"]["status"] == "no_repair_needed"
     assert "repair_proposal" not in result

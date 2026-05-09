@@ -11,7 +11,7 @@ def test_graph_state_declares_analysis_runs_as_append_reducer():
 
 
 def test_summarize_node_returns_analysis_runs_delta_not_full_registry():
-    text = Path("core/graph.py").read_text(
+    text = Path("core/workflow/nodes/summarization.py").read_text(
         encoding="utf-8",
         errors="ignore",
     )

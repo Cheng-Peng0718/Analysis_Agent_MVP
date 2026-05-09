@@ -1,4 +1,4 @@
-from core.graph import _attach_execution_audit
+from core.workflow.audit_runtime import attach_execution_audit
 
 
 def test_attach_execution_audit_records_ok_status_for_consistent_update():
@@ -31,7 +31,7 @@ def test_attach_execution_audit_records_ok_status_for_consistent_update():
         ],
     }
 
-    result = _attach_execution_audit(state, updates)
+    result = attach_execution_audit(state, updates)
 
     assert "execution_audit" in result
     assert result["execution_audit"]["status"] == "ok"
@@ -51,7 +51,7 @@ def test_attach_execution_audit_records_error_for_bad_data_version():
         "active_data_version_id": "missing_version",
     }
 
-    result = _attach_execution_audit(state, updates)
+    result = attach_execution_audit(state, updates)
 
     assert result["execution_audit"]["status"] == "error"
     assert any(
