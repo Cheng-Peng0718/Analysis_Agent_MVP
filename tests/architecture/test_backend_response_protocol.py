@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.graph import final_response_node
+from core.workflow.nodes.finalization import final_response_node
 
 
 def test_backend_final_response_uses_assistant_response():

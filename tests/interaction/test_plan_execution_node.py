@@ -1,5 +1,5 @@
-from core.graph import execute_pending_plan_node
-
+from core.workflow.nodes.plan_execution import execute_pending_plan_node
+from core.workflow.routes import route_after_verify
 
 def test_execute_pending_plan_without_plan_returns_response_only():
     state = {
@@ -69,8 +69,6 @@ def test_execute_pending_plan_creates_action_for_ready_step():
     assert result["current_plan_step_id"] == "s1"
     assert result["plan_execution_status"] == "started_step"
     assert result["action_origin"] == "pending_plan"
-
-from core.graph import route_after_verify
 
 
 class DummyVerification:

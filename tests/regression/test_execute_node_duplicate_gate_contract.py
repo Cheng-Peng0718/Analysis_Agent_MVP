@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.graph import execute_node
+from core.workflow.nodes.execution import execute_node
 from core.schema import ActionProposal
 
 

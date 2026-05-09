@@ -140,7 +140,7 @@ def test_mark_plan_step_after_execution_completed():
     assert updated["status"] == "completed"
 
 def test_execute_pending_plan_creates_action_for_ready_step():
-    from core.graph import execute_pending_plan_node
+    from core.workflow.nodes.plan_execution import execute_pending_plan_node
 
     state = {
         "active_data_version_id": "raw_v1",

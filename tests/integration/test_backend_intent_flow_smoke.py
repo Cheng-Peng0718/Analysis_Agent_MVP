@@ -1,9 +1,9 @@
-from core.graph import (
-    advisory_answer_node,
-    execute_pending_plan_node,
+from core.workflow.nodes.interaction import (
     intent_router_node,
-    plan_only_node,
+    advisory_answer_node,
 )
+from core.workflow.nodes.planning import plan_only_node
+from core.workflow.nodes.plan_execution import execute_pending_plan_node
 
 
 def make_column(

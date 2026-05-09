@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.graph import summarize_node
+from core.workflow.nodes.summarization import summarize_node
 
 
 def make_action(

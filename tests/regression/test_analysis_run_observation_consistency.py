@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from core.audit.execution_state import audit_execution_state
 from core.controller.backend_turn import _apply_updates
-from core.graph import summarize_node
+from core.workflow.nodes.summarization import summarize_node
 
 
 def make_action(action_id, tool_name):

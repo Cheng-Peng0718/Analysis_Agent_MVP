@@ -1,10 +1,10 @@
 from types import SimpleNamespace
-
-from core.graph import (
+from core.workflow.nodes.finalization import (
     deliverable_gate_node,
     final_response_node,
-    summarize_node,
 )
+
+from core.workflow.nodes.summarization import summarize_node
 
 
 def make_action(

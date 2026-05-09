@@ -1,4 +1,4 @@
-from core.graph import human_review_node
+from core.workflow.nodes.human_review import human_review_node
 
 
 def test_human_review_node_accepts_dict_action_and_dict_verification_for_needs_review():

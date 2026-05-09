@@ -1,4 +1,4 @@
-from core.graph import execute_pending_plan_node
+from core.workflow.nodes.plan_execution import execute_pending_plan_node
 
 
 def make_state():

@@ -1,16 +1,15 @@
 import json
-
 import pandas as pd
-
-from core.graph import (
-    advisory_answer_node,
-    execute_node,
-    execute_pending_plan_node,
-    human_review_node,
+from core.workflow.nodes.interaction import (
     intent_router_node,
-    summarize_node,
-    verify_node,
+    advisory_answer_node,
 )
+from core.workflow.nodes.plan_execution import execute_pending_plan_node
+from core.workflow.nodes.verification import verify_node
+from core.workflow.nodes.human_review import human_review_node
+from core.workflow.nodes.execution import execute_node
+from core.workflow.nodes.summarization import summarize_node
+
 from core.ui_adapter.events import (
     apply_ui_event_to_state,
     make_approve_human_review_event,

@@ -2,7 +2,8 @@ import pandas as pd
 
 from core.dataset_intelligence.profiler import profile_dataframe
 from core.dataset_intelligence.capability_map import build_capability_map
-from core.graph import plan_only_node, advisory_answer_node
+from core.workflow.nodes.planning import plan_only_node
+from core.workflow.nodes.interaction import advisory_answer_node
 
 
 def make_state():

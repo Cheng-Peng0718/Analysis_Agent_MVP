@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.graph import final_response_node
+from core.workflow.nodes.finalization import final_response_node
 from core.workflow.routes import route_after_deliverable_gate
 
 

@@ -2,15 +2,19 @@ import json
 
 import pandas as pd
 
-from core.graph import (
-    deliverable_gate_node,
-    execute_node,
-    execute_pending_plan_node,
-    final_response_node,
-    summarize_node,
-    verify_node,
-)
 from core.ui_adapter.snapshot import build_ui_snapshot
+
+from core.workflow.nodes.execution import execute_node
+
+from core.workflow.nodes.finalization import final_response_node
+
+from core.workflow.nodes.summarization import summarize_node
+
+from core.workflow.nodes.verification import verify_node
+
+from core.workflow.nodes.plan_execution import execute_pending_plan_node
+
+from core.workflow.nodes.finalization import deliverable_gate_node
 
 
 def apply_updates(state, updates):

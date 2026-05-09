@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.graph import human_review_node
+from core.workflow.nodes.human_review import human_review_node
 
 
 def make_action():

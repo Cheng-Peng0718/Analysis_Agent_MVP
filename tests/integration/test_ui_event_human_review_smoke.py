@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.graph import human_review_node
+from core.workflow.nodes.human_review import human_review_node
 from core.ui_adapter.events import (
     apply_ui_event_to_state,
     make_approve_human_review_event,
