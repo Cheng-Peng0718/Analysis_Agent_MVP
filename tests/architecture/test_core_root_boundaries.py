@@ -9,7 +9,6 @@ BACKEND_CORE_FILES = [
     Path("core/responses.py"),
     Path("core/schema.py"),
     Path("core/state.py"),
-    Path("core/interaction_intent.py"),
 ]
 
 
