@@ -55,6 +55,19 @@ def normalize_string_list(value: Any) -> List[str]:
     return []
 
 
+def get_field(value: Any, field_name: str, default: Any = None) -> Any:
+    if value is None:
+        return default
+
+    if isinstance(value, dict):
+        return value.get(field_name, default)
+
+    return getattr(value, field_name, default)
+
+
+
+
+
 def extract_final_answer_content_from_state(state: Any) -> str | None:
     """
     Extract final-answer text from backend graph state.
@@ -67,27 +80,34 @@ def extract_final_answer_content_from_state(state: Any) -> str | None:
     direct = get_state_value(state, "final_answer")
 
     if isinstance(direct, str) and direct.strip():
-        return direct
+        return direct.strip()
 
     action = get_state_value(state, "current_action")
 
     for field_name in ["final_answer", "answer", "content", "message"]:
-        value = get_action_field(action, field_name)
+        value = get_field(action, field_name)
 
         if isinstance(value, str) and value.strip():
-            return value
+            return value.strip()
 
-    arguments = get_action_field(action, "arguments", {}) or {}
+    arguments = get_field(action, "arguments", {})
 
     if isinstance(arguments, dict):
         for key in ["final_answer", "answer", "content", "message"]:
             value = arguments.get(key)
 
             if isinstance(value, str) and value.strip():
-                return value
+                return value.strip()
+
+    action_type = get_field(action, "action_type")
+
+    if action_type == "final_answer":
+        reasoning_summary = get_field(action, "reasoning_summary")
+
+        if isinstance(reasoning_summary, str) and reasoning_summary.strip():
+            return reasoning_summary.strip()
 
     return None
-
 
 def get_deliverable_evidence(state: Any) -> Dict[str, Any]:
     """

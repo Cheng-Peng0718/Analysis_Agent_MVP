@@ -68,3 +68,23 @@ def test_deliverable_gate_node_stores_deliverable_check():
         "missing",
         "blocked",
     }
+
+def test_final_response_node_wraps_final_answer_action_reasoning_summary():
+    result = final_response_node({
+        "active_data_version_id": "raw_v1",
+        "current_action": {
+            "action_type": "final_answer",
+            "reasoning_summary": "Dataset has 5 rows and 4 columns.",
+        },
+        "deliverable_check": {
+            "status": "ok",
+            "satisfied": [],
+            "missing": [],
+            "blocked": [],
+        },
+    })
+
+    assert result["assistant_response"]["response_type"] == "final_answer"
+    assert result["assistant_response"]["content"] == (
+        "Dataset has 5 rows and 4 columns."
+    )

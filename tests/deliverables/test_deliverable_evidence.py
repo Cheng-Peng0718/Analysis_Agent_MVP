@@ -53,3 +53,32 @@ def test_get_explicit_satisfied_deliverables_and_criteria():
 
     assert "mention limitations" in get_satisfied_criterion_names(state)
     assert "contains:p-value" in get_satisfied_criterion_names(state)
+
+def test_extract_final_answer_from_final_answer_action_reasoning_summary():
+    assert extract_final_answer_content_from_state({
+        "current_action": {
+            "action_type": "final_answer",
+            "reasoning_summary": "Dataset has 5 rows and 4 columns.",
+        }
+    }) == "Dataset has 5 rows and 4 columns."
+
+
+def test_extract_final_answer_does_not_use_tool_call_reasoning_summary():
+    assert extract_final_answer_content_from_state({
+        "current_action": {
+            "action_type": "tool_call",
+            "reasoning_summary": "I will inspect the dataset.",
+        }
+    }) is None
+
+
+def test_extract_final_answer_prefers_arguments_over_reasoning_summary():
+    assert extract_final_answer_content_from_state({
+        "current_action": {
+            "action_type": "final_answer",
+            "arguments": {
+                "final_answer": "Answer from arguments.",
+            },
+            "reasoning_summary": "Reasoning summary fallback.",
+        }
+    }) == "Answer from arguments."
