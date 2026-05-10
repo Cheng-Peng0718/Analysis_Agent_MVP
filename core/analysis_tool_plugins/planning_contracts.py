@@ -17,5 +17,5 @@ class PlanningMetadata:
 
     not_recommended_for_goal_types: List[str] = field(default_factory=list)
 
-    # None means "not specified locally; use central fallback if available."
+    # None means "not specified locally"; ToolManifest normalizes it to 100.
     plan_order: Optional[int] = None
