@@ -86,3 +86,36 @@ def test_plan_runner_uses_turn_contract_not_workflow_nodes():
 
     for phrase in forbidden:
         assert phrase not in text
+
+def test_session_backend_does_not_import_graph_nodes_or_ui():
+    text = Path("core/app_backend/session.py").read_text(
+        encoding="utf-8"
+    )
+
+    forbidden = [
+        "create_graph_app",
+        "run_graph_once",
+        "core.workflow.nodes",
+        "streamlit",
+        "st.",
+    ]
+
+    for phrase in forbidden:
+        assert phrase not in text
+
+
+def test_app_backend_public_api_exports_ui_contract_functions():
+    text = Path("core/app_backend/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    expected = [
+        "create_app_session",
+        "initialize_dataset_session_from_file",
+        "run_user_turn",
+        "run_pending_plan_until_pause",
+        "build_ui_snapshot",
+    ]
+
+    for name in expected:
+        assert name in text
