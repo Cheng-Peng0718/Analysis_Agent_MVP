@@ -1,25 +1,18 @@
 from __future__ import annotations
 
-from agents.supervisor import call_supervisor
 from core.action_access import (
     get_action_field,
     get_action_reasoning_summary,
     get_action_type,
 )
 from core.context_builder import build_context
+from core.services.task_contracts import task_contract_to_state_dict
 
 
-def _task_contract_to_dict(contract) -> dict:
-    if contract is None:
-        return {}
+def call_supervisor(context_pkg):
+    from agents.supervisor import call_supervisor as real_call_supervisor
 
-    if hasattr(contract, "model_dump"):
-        return contract.model_dump()
-
-    if isinstance(contract, dict):
-        return contract
-
-    return {}
+    return real_call_supervisor(context_pkg)
 
 
 def supervisor_node(state: dict):
@@ -37,6 +30,7 @@ def supervisor_node(state: dict):
         data_versions=state.get("data_versions", []),
         active_data_version_id=state.get("active_data_version_id"),
         data_audit_log=state.get("data_audit_log", []),
+        task_contract=state.get("task_contract"),
     )
 
     action = call_supervisor(context_pkg)
@@ -48,7 +42,7 @@ def supervisor_node(state: dict):
     print("=" * 40 + "\n")
 
     contract = get_action_field(action, "task_contract", None)
-    contract_dict = _task_contract_to_dict(contract)
+    contract_dict = task_contract_to_state_dict(contract)
 
     if contract_dict:
         print(

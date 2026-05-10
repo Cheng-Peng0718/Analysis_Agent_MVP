@@ -1,3 +1,4 @@
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 import pandas as pd
 
 from core.analysis_tool_plugins import get_plugin
@@ -35,7 +36,7 @@ def test_correlation_matrix_unified_execute_and_analysis_run():
     assert raw["details"]["numeric_columns"] == ["A", "B"]
     assert "correlation_rows" in raw["details"]
 
-    run = plugin.build_analysis_run(
+    run = build_analysis_run_for_plugin(plugin,
         action_id="act_test",
         arguments={"columns": ["A", "B", "C"]},
         data_version_id="raw_v1",

@@ -304,6 +304,267 @@ def test_backend_turn_controller_approval_continues_clean_data_execution(tmp_pat
 
     json.dumps(second_result)
 
+
+def test_backend_turn_controller_dispatches_direct_regression_to_execution(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+
+    def fake_supervisor_node(state):
+        calls.append("supervisor")
+        assert state["interaction_intent"] == "direct_tool"
+        assert state["intent_decision"]["intent"] == "direct_analysis"
+        assert state["task_spec"]["goal_type"] == "regression_modeling"
+
+        return {
+            "current_action": ActionProposal(
+                action_id="act_direct_regression",
+                action_type="tool_call",
+                tool_name="run_multiple_regression",
+                arguments={
+                    "target_col": "GPA",
+                    "feature_cols": ["SATM"],
+                },
+                reasoning_summary="Run direct regression.",
+            ),
+        }
+
+    def fake_verify_node(state):
+        calls.append("verify")
+        assert state["current_action"].tool_name == "run_multiple_regression"
+        return {
+            "current_verification": {
+                "status": "allowed",
+                "feedback": "ok",
+                "details": {},
+            },
+            "human_review_required": False,
+        }
+
+    def fake_execute_node(state):
+        calls.append("execute")
+        return {
+            "current_execution": {
+                "execution_id": "exec_direct_regression",
+                "action_id": "act_direct_regression",
+                "tool_name": "run_multiple_regression",
+                "status": "ok",
+                "success": True,
+                "message": "Regression completed.",
+                "payload": {
+                    "metrics": {"r_squared": 0.72},
+                },
+                "artifacts": [],
+            }
+        }
+
+    def fake_summarize_node(state):
+        calls.append("summarize")
+        return {
+            "observations": [
+                {
+                    "observation_id": "obs_direct_regression",
+                    "source_action_id": "act_direct_regression",
+                    "tool_name": "run_multiple_regression",
+                    "status": "ok",
+                    "success": True,
+                    "summary": "Regression completed.",
+                    "structured_data": {
+                        "r_squared": 0.72,
+                    },
+                    "raw_data": {},
+                }
+            ],
+            "analysis_runs": [
+                {
+                    "run_id": "run_direct_regression",
+                    "tool_name": "run_multiple_regression",
+                    "status": "ok",
+                    "success": True,
+                    "metrics": {"r_squared": 0.72},
+                    "artifacts": [],
+                }
+            ],
+            "current_action": None,
+            "current_execution": None,
+            "current_verification": None,
+        }
+
+    monkeypatch.setattr(backend_turn_module, "supervisor_node", fake_supervisor_node)
+    monkeypatch.setattr(backend_turn_module, "verify_node", fake_verify_node)
+    monkeypatch.setattr(backend_turn_module, "execute_node", fake_execute_node)
+    monkeypatch.setattr(backend_turn_module, "summarize_node", fake_summarize_node)
+
+    state = make_base_state(tmp_path)
+    state["assistant_response"] = {
+        "response_id": "resp_stale",
+        "response_type": "advisory",
+        "content": "stale advisory fallback",
+        "source_node": "advisory_answer",
+        "metadata": {},
+    }
+
+    updates = apply_ui_event_to_state(
+        state,
+        make_user_message_event("run linear regression of GPA on SATM"),
+    )
+    state = apply_updates(state, updates)
+
+    result = run_backend_turn(state)
+
+    assert result["status"] == "ok"
+    assert result["node_trace"] == [
+        "intent_router_node",
+        "supervisor_node",
+        "verify_node",
+        "execute_node",
+        "summarize_node",
+    ]
+    assert calls == ["supervisor", "verify", "execute", "summarize"]
+
+    state = result["state"]
+    response = result["ui_snapshot"]["assistant_response"]
+
+    assert state["interaction_intent"] == "direct_tool"
+    assert state["intent_decision"]["intent"] == "direct_analysis"
+    assert state["analysis_runs"][0]["tool_name"] == "run_multiple_regression"
+    assert response["source_node"] == "backend_turn_direct_tool"
+    assert response["content"] != "stale advisory fallback"
+    assert "run_multiple_regression" in response["content"]
+
+    json.dumps(result)
+
+
+def test_backend_turn_controller_direct_clean_data_stops_for_human_review(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+
+    def fake_supervisor_node(state):
+        calls.append("supervisor")
+        assert state["interaction_intent"] == "direct_tool"
+        assert state["intent_decision"]["intent"] == "modify_data"
+        assert state["task_spec"]["goal_type"] == "data_cleaning"
+
+        return {
+            "current_action": ActionProposal(
+                action_id="act_direct_clean",
+                action_type="tool_call",
+                tool_name="clean_data",
+                arguments={
+                    "action_type": "drop",
+                    "strategy": "rows",
+                    "columns": ["GPA"],
+                },
+                reasoning_summary="Drop rows with missing GPA.",
+            ),
+        }
+
+    def fail_execute_node(state):
+        raise AssertionError("clean_data executed before human review")
+
+    monkeypatch.setattr(backend_turn_module, "supervisor_node", fake_supervisor_node)
+    monkeypatch.setattr(backend_turn_module, "execute_node", fail_execute_node)
+
+    state = make_base_state(tmp_path, with_missing=True)
+
+    updates = apply_ui_event_to_state(
+        state,
+        make_user_message_event("drop rows with missing GPA"),
+    )
+    state = apply_updates(state, updates)
+
+    result = run_backend_turn(state)
+
+    assert result["status"] == "needs_review"
+    assert result["node_trace"] == [
+        "intent_router_node",
+        "supervisor_node",
+        "verify_node",
+        "human_review_node",
+    ]
+    assert calls == ["supervisor"]
+
+    state = result["state"]
+    snapshot = result["ui_snapshot"]
+
+    assert state["interaction_intent"] == "direct_tool"
+    assert state["intent_decision"]["intent"] == "modify_data"
+    assert state["current_verification"]["status"] == "needs_review"
+    assert state["current_verification"]["details"]["tool_name"] == "clean_data"
+    assert state["current_verification"]["details"]["requires_confirmation"] is True
+    assert state["current_verification"]["details"]["mutates_data"] is True
+    assert state["pending_action"]["tool_name"] == "clean_data"
+    assert snapshot["human_review"]["required"] is True
+    assert snapshot["human_review"]["action"]["tool_name"] == "clean_data"
+    assert snapshot["runtime"]["has_current_action"] is True
+    assert state["analysis_runs"] == []
+    assert state["observations"] == []
+    assert state["data_versions"][0]["version_id"] == "raw_v1"
+    assert state["active_data_version_id"] == "raw_v1"
+    assert snapshot["assistant_response"]["source_node"] == "backend_turn_direct_tool"
+    assert "No data has been changed yet" in snapshot["assistant_response"]["content"]
+
+    json.dumps(result)
+
+
+def test_backend_turn_controller_direct_tool_without_action_gets_fresh_response(
+    tmp_path,
+    monkeypatch,
+):
+    def fake_intent_router_node(state):
+        return {
+            "interaction_intent": "direct_tool",
+            "intent_decision": {
+                "intent": "direct_analysis",
+                "confidence": 0.9,
+                "reason": "test direct request",
+                "should_execute": True,
+            },
+        }
+
+    def fake_supervisor_node(state):
+        return {
+            "current_action": None,
+        }
+
+    monkeypatch.setattr(
+        backend_turn_module,
+        "intent_router_node",
+        fake_intent_router_node,
+    )
+    monkeypatch.setattr(backend_turn_module, "supervisor_node", fake_supervisor_node)
+
+    state = make_base_state(tmp_path)
+    state["assistant_response"] = {
+        "response_id": "resp_stale",
+        "response_type": "advisory",
+        "content": "stale advisory fallback",
+        "source_node": "advisory_answer",
+        "metadata": {},
+    }
+
+    result = run_backend_turn(state)
+
+    assert result["status"] == "blocked"
+    assert result["node_trace"] == [
+        "intent_router_node",
+        "supervisor_node",
+    ]
+
+    response = result["ui_snapshot"]["assistant_response"]
+
+    assert response["response_id"] != "resp_stale"
+    assert response["response_type"] == "error"
+    assert response["source_node"] == "backend_turn_direct_tool"
+    assert response["content"] != "stale advisory fallback"
+    assert "No tools were executed" in response["content"]
+
+    json.dumps(result)
+
+
 def test_backend_turn_controller_does_not_execute_after_plan_choice_update(tmp_path):
     state = make_base_state(tmp_path)
     state["pending_plan"] = {

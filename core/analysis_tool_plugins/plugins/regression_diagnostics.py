@@ -6,10 +6,10 @@ import statsmodels.api as sm
 import statsmodels.stats.api as sms
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
-    ArgumentSchema,
-    VariableRoleSpec,
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.arguments import ArgumentSchema
+from core.analysis_tool_plugins.roles import VariableRoleSpec
+from core.analysis_tool_plugins.display import (
     DisplayConfig,
     MetricDisplayConfig,
     TableDisplayConfig,

@@ -16,7 +16,8 @@ def test_build_context_node_lives_outside_core_graph():
     assert "def _load_dataframe_for_dataset_intelligence" not in graph_text
 
     assert "def build_context_node" in context_text
-    assert "def _load_dataframe_for_dataset_intelligence" in context_text
+    assert "refresh_dataset_context_from_path" in context_text
+    assert "def _load_dataframe_for_dataset_intelligence" not in context_text
 
 
 def test_core_graph_imports_build_context_node_from_workflow_nodes():
@@ -32,6 +33,7 @@ def test_core_graph_imports_build_context_node_from_workflow_nodes():
         "from core.data_versions import get_active_data_path",
         "from core.dataset_intelligence.profiler import profile_dataframe, summarize_profile",
         "from core.dataset_intelligence.capability_map import build_capability_map",
+        "from core.data.context_refresh import refresh_dataset_context_from_path",
         "import pandas as pd",
     ]
 

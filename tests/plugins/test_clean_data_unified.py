@@ -1,3 +1,4 @@
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 import os
 import tempfile
 import pandas as pd
@@ -103,7 +104,7 @@ def test_clean_data_drop_rows_creates_data_version_update():
     assert update["active_data_version_id"].startswith("data_v_")
     assert update["new_version"]["version_id"].startswith("data_v_")
 
-    run = plugin.build_analysis_run(
+    run = build_analysis_run_for_plugin(plugin,
         action_id="act_test",
         arguments={
             "action_type": "drop",

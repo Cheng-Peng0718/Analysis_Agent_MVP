@@ -3,9 +3,9 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
-    ArgumentSchema,
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.arguments import ArgumentSchema
+from core.analysis_tool_plugins.display import (
     DisplayConfig,
     compact_dict,
 )

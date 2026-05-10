@@ -1,3 +1,4 @@
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 from core.analysis_tool_plugins import get_plugin
 
 
@@ -6,7 +7,7 @@ def test_correlation_test_plugin_builds_analysis_run():
 
     assert plugin is not None
 
-    run = plugin.build_analysis_run(
+    run = build_analysis_run_for_plugin(plugin,
         action_id="act_test",
         arguments={
             "x_col": "GPA",

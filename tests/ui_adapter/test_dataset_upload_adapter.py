@@ -66,6 +66,13 @@ def test_prepare_uploaded_dataset_state_creates_initial_data_version(tmp_path):
 
     assert updates["dataset_profile"]["n_rows"] == 3
     assert updates["dataset_profile"]["n_cols"] == 2
+    assert "dataset_profile_v2" in updates
+    assert "dataset_summary" in updates
+    assert "capability_map" in updates
+    assert "dataset_context" in updates
+    assert updates["dataset_context"]["data_version_id"] == "raw_v1"
+    assert updates["dataset_context"]["source"] == "upload"
+    assert updates["dataset_context"]["legacy_dataset_profile"]["n_cols"] == 2
 
     assert len(updates["data_audit_log"]) == 1
     assert updates["data_audit_log"][0]["event_type"] == "data_version_created"

@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from core.analysis_tool_plugins import get_plugin as get_unified_plugin
 from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 
 
 def _generic_unified_fallback_plugin(tool_name: str) -> AnalysisToolPlugin:
@@ -142,7 +143,8 @@ def build_analysis_run_from_observation(
         plugin = _generic_unified_fallback_plugin(tool_name)
 
     try:
-        run = plugin.build_analysis_run(
+        run = build_analysis_run_for_plugin(
+            plugin,
             action_id=action_id,
             arguments=arguments,
             data_version_id=data_version_id,

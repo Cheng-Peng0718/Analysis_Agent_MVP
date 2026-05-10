@@ -5,6 +5,23 @@ from core.deliverables.evidence import extract_final_answer_content_from_state
 from core.responses import make_response_update
 
 
+def _deliverable_metadata(state: dict, extra: dict | None = None) -> dict:
+    deliverable_check = state.get("deliverable_check") or {}
+
+    metadata = {
+        "deliverable_check": deliverable_check,
+        "deliverable_status": deliverable_check.get("status"),
+        "satisfied_deliverables": deliverable_check.get("satisfied", []),
+        "missing_deliverables": deliverable_check.get("missing", []),
+        "blocked_deliverables": deliverable_check.get("blocked", []),
+    }
+
+    if extra:
+        metadata.update(extra)
+
+    return metadata
+
+
 def final_response_node(state: dict):
     """
     Convert a deliverable-gate-approved final answer into assistant_response.
@@ -25,10 +42,10 @@ def final_response_node(state: dict):
             content=content,
             source_node="final_response",
             data_version_id=state.get("active_data_version_id"),
-            metadata={
-                "reason": "missing_final_answer_content",
-                "deliverable_check": state.get("deliverable_check"),
-            },
+            metadata=_deliverable_metadata(
+                state,
+                extra={"reason": "missing_final_answer_content"},
+            ),
         )
 
         updates.update({
@@ -44,9 +61,7 @@ def final_response_node(state: dict):
         content=content,
         source_node="final_response",
         data_version_id=state.get("active_data_version_id"),
-        metadata={
-            "deliverable_check": state.get("deliverable_check"),
-        },
+        metadata=_deliverable_metadata(state),
     )
 
     updates.update({

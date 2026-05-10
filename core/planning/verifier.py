@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from core.analysis_tool_plugins import get_plugin
-from core.analysis_tool_plugins.base import ApplicabilityResult
+from core.analysis_tool_plugins.applicability import ApplicabilityResult
 from core.dataset_intelligence.schemas import DatasetProfileV2
 from core.planning.schemas import PlanProposal, PlanStep
 from core.planning.dependencies import reorder_clean_data_before_modeling
@@ -141,6 +141,10 @@ def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) ->
         return _verify_clean_data_choices(step, profile)
 
     role_specs = getattr(plugin, "variable_roles", []) or []
+    planning_policy = getattr(plugin, "planning_policy", None)
+    ready_without_user_variables = bool(
+        getattr(planning_policy, "ready_without_user_variables", False)
+    )
 
     if step.tool_name in AUTO_READY_TOOLS:
         step.required_user_choices = [
@@ -156,6 +160,15 @@ def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) ->
         ]
 
     if not role_specs:
+        if ready_without_user_variables:
+            step.status = "ready"
+            step.execution_ready = True
+            step.required_user_choices = []
+            step.warnings = []
+            step.arguments = step.arguments or {}
+
+            return step
+
         if (
                 step.tool_name in NO_ROLE_READY_TOOLS
                 and step.status not in {"blocked", "not_applicable"}

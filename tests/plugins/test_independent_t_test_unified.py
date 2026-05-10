@@ -1,3 +1,4 @@
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 import pandas as pd
 
 from core.analysis_tool_plugins import get_plugin
@@ -43,7 +44,7 @@ def test_independent_t_test_unified_execute_and_analysis_run():
     assert "t_statistic" in raw["details"]
     assert "p_value" in raw["details"]
 
-    run = plugin.build_analysis_run(
+    run = build_analysis_run_for_plugin(plugin,
         action_id="act_test",
         arguments={
             "target_col": "score",

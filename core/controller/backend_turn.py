@@ -10,6 +10,7 @@ from core.workflow.nodes.interaction import (
 )
 from core.workflow.nodes.planning import plan_only_node
 from core.workflow.nodes.plan_execution import execute_pending_plan_node
+from core.workflow.nodes.supervisor import supervisor_node
 from core.workflow.nodes.verification import verify_node
 from core.workflow.nodes.human_review import human_review_node
 from core.workflow.nodes.execution import execute_node
@@ -27,6 +28,7 @@ from core.action_codec import action_from_state, action_to_state_dict
 from core.verification_access import get_verification_status
 from core.verification_codec import verification_to_state_dict
 from core.execution_codec import execution_to_state_dict
+from core.responses import make_response_update
 
 class BackendTurnResult(BaseModel):
     """
@@ -98,6 +100,65 @@ def _apply_updates(state: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, 
 def _verification_status(state: Dict[str, Any]) -> str | None:
     verification = state.get("current_verification")
     return get_verification_status(verification)
+
+
+def _assistant_response_id(state: Dict[str, Any]) -> str | None:
+    return _get_field(state.get("assistant_response"), "response_id")
+
+
+def _make_direct_tool_response(
+    state: Dict[str, Any],
+    *,
+    status: str,
+    message: str | None = None,
+) -> Dict[str, Any]:
+    observations = state.get("observations") or []
+    last_observation = observations[-1] if observations else {}
+
+    if status == "ok" and isinstance(last_observation, dict):
+        tool_name = last_observation.get("tool_name") or "the requested tool"
+        summary = last_observation.get("summary") or "The requested analysis completed."
+        content = f"Executed `{tool_name}`.\n\n{summary}"
+        response_type = "final_answer"
+    elif status == "needs_review":
+        content = message or "This action requires human review before execution."
+        content = f"{content} No data has been changed yet."
+        response_type = "clarification"
+    else:
+        content = (
+            message
+            or "I understood this as a direct analysis request, but could not produce an executable action."
+        )
+        response_type = "error"
+
+    return make_response_update(
+        response_type=response_type,
+        content=content,
+        source_node="backend_turn_direct_tool",
+        data_version_id=state.get("active_data_version_id"),
+        metadata={
+            "interaction_intent": state.get("interaction_intent"),
+            "status": status,
+        },
+    )
+
+
+def _ensure_fresh_direct_tool_response(
+    state: Dict[str, Any],
+    *,
+    previous_response_id: str | None,
+    status: str,
+    message: str | None = None,
+) -> Dict[str, Any]:
+    if _assistant_response_id(state) != previous_response_id:
+        return state
+
+    updates = _make_direct_tool_response(
+        state,
+        status=status,
+        message=message,
+    )
+    return _apply_updates(state, updates)
 
 def _normalize_state_executions_for_storage(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -386,6 +447,57 @@ def run_backend_turn(state: Any) -> Dict[str, Any]:
             current_state, status, message = _run_verify_execute_summarize(
                 current_state,
                 node_trace=node_trace,
+            )
+
+            return _finish(
+                state=current_state,
+                node_trace=node_trace,
+                status=status,
+                message=message,
+            ).model_dump()
+
+        if intent == "direct_tool":
+            previous_response_id = _assistant_response_id(current_state)
+
+            updates = supervisor_node(current_state)
+            node_trace.append("supervisor_node")
+            current_state = _apply_updates(current_state, updates)
+
+            if not _has_current_action(current_state):
+                current_state = _apply_updates(
+                    current_state,
+                    _make_direct_tool_response(
+                        current_state,
+                        status="blocked",
+                        message=(
+                            "I understood this as a direct analysis request, "
+                            "but could not produce an executable action. No tools were executed."
+                        ),
+                    ),
+                )
+
+                return _finish(
+                    state=current_state,
+                    node_trace=node_trace,
+                    status="blocked",
+                    message="No executable action was produced.",
+                ).model_dump()
+
+            current_state, status, message = _run_verify_execute_summarize(
+                current_state,
+                node_trace=node_trace,
+            )
+
+            if status == "needs_review":
+                updates = human_review_node(current_state)
+                node_trace.append("human_review_node")
+                current_state = _apply_updates(current_state, updates)
+
+            current_state = _ensure_fresh_direct_tool_response(
+                current_state,
+                previous_response_id=previous_response_id,
+                status=status,
+                message=message,
             )
 
             return _finish(

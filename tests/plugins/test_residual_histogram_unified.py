@@ -1,3 +1,4 @@
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 from pathlib import Path
 
 import pandas as pd
@@ -51,7 +52,7 @@ def test_residual_histogram_unified_execute_and_analysis_run(tmp_path):
     assert raw["artifacts"]
     assert raw["artifacts"][0]["type"] == "png"
 
-    run = plugin.build_analysis_run(
+    run = build_analysis_run_for_plugin(plugin,
         action_id="act_test",
         arguments={
             "target_col": "y",

@@ -10,12 +10,21 @@ def test_final_response_node_wraps_final_answer():
         "final_answer": "Final result.",
         "deliverable_check": {
             "status": "ok",
+            "satisfied": ["tool:get_summary_stats"],
+            "missing": [],
+            "blocked": [],
         },
     })
 
     assert result["assistant_response"]["response_type"] == "final_answer"
     assert result["assistant_response"]["content"] == "Final result."
     assert result["assistant_response"]["source_node"] == "final_response"
+    assert result["assistant_response"]["metadata"]["deliverable_status"] == "ok"
+    assert result["assistant_response"]["metadata"]["satisfied_deliverables"] == [
+        "tool:get_summary_stats",
+    ]
+    assert result["assistant_response"]["metadata"]["missing_deliverables"] == []
+    assert result["assistant_response"]["metadata"]["blocked_deliverables"] == []
 
     assert result["current_action"] is None
     assert result["current_execution"] is None
@@ -27,6 +36,9 @@ def test_final_response_node_returns_error_when_content_missing():
         "active_data_version_id": "raw_v1",
         "deliverable_check": {
             "status": "ok",
+            "satisfied": [],
+            "missing": ["criterion:evidence:coef_table"],
+            "blocked": [],
         },
     })
 
@@ -34,6 +46,9 @@ def test_final_response_node_returns_error_when_content_missing():
     assert result["assistant_response"]["metadata"]["reason"] == (
         "missing_final_answer_content"
     )
+    assert result["assistant_response"]["metadata"]["missing_deliverables"] == [
+        "criterion:evidence:coef_table",
+    ]
 
     assert result["current_action"] is None
     assert result["current_execution"] is None

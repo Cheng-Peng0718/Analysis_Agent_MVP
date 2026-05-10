@@ -28,6 +28,8 @@ class GraphState(TypedDict):
     action_origin: str
 
     interaction_intent: str
+    intent_decision: dict
+    task_spec: dict
     dataset_profile_v2: dict
     dataset_summary: dict
     capability_map: dict
@@ -42,6 +44,8 @@ class GraphState(TypedDict):
     state_serialization_audit: dict
 
     latest_ui_event: dict
+    human_review_required: bool
+    pending_action: Any
     human_review_action_hash: str
     human_review_rejection_reason: str
     selected_plan_step_id: str

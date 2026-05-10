@@ -42,9 +42,16 @@ def test_build_context_node_creates_profiles_summary_and_capability_map(tmp_path
     assert "dataset_profile_v2" in updates
     assert "dataset_summary" in updates
     assert "capability_map" in updates
+    assert "dataset_context" in updates
 
     assert updates["dataset_profile_v2"]["dataset_name"] == "student_data"
     assert updates["dataset_profile_v2"]["data_version_id"] == "raw_v1"
+
+    dataset_context = updates["dataset_context"]
+    assert dataset_context["data_version_id"] == "raw_v1"
+    assert dataset_context["dataset_name"] == "student_data"
+    assert dataset_context["source"] == "build_context"
+    assert dataset_context["dataset_profile_v2"]["data_version_id"] == "raw_v1"
 
     summary = updates["dataset_summary"]
     assert summary["n_rows"] == 4

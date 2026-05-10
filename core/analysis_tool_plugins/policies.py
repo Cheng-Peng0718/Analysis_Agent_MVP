@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.analysis_tool_plugins.base import (
+from core.analysis_tool_plugins.policy_types import (
     PlanningPolicy,
     VersioningPolicy,
     RepairPolicy,

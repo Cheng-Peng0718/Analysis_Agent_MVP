@@ -1,10 +1,11 @@
-from core.deliverables.contracts import TaskContract, normalize_task_contract
+from core.deliverables.contracts import DeliverableGateContract, normalize_task_contract
+from core.domain.deliverable import DeliverableCheckResult
 
 
 def test_normalize_empty_contract():
     contract = normalize_task_contract(None)
 
-    assert isinstance(contract, TaskContract)
+    assert isinstance(contract, DeliverableGateContract)
     assert contract.required_tools == []
     assert contract.required_artifacts == []
     assert contract.required_deliverables == []
@@ -28,3 +29,35 @@ def test_normalize_legacy_task_contract_dict():
     assert contract.success_criteria == ["mention missingness"]
     assert contract.allow_partial is True
     assert contract.metadata["custom_field"] == "kept"
+
+
+def test_normalize_canonical_domain_task_contract_dict():
+    contract = normalize_task_contract({
+        "contract_id": "contract_01",
+        "user_goal": "Fit a regression model.",
+        "required_deliverables": [
+            {
+                "deliverable_id": "regression_model",
+                "description": "Fit OLS regression.",
+                "satisfied_by": ["run_multiple_regression"],
+                "required_evidence": ["status_ok", "coef_table", "r_squared"],
+                "status": "pending",
+            }
+        ],
+    })
+
+    assert contract.required_tools == ["run_multiple_regression"]
+    assert contract.required_deliverables == ["regression_model"]
+    assert contract.success_criteria == [
+        "evidence:status_ok",
+        "evidence:coef_table",
+        "evidence:r_squared",
+    ]
+
+
+def test_deliverable_check_result_accepts_gate_and_legacy_statuses():
+    for status in ["needs_more_work", "missing", "blocked"]:
+        result = DeliverableCheckResult(status=status)
+
+        assert result.status == status
+        assert result.model_dump()["status"] == status

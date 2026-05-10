@@ -57,6 +57,105 @@ def test_build_ui_snapshot_for_final_answer_state_is_json_safe():
     json.dumps(snapshot)
 
 
+def test_build_ui_snapshot_does_not_expose_full_dataset_context():
+    state = {
+        "dataset_context": {
+            "data_version_id": "raw_v1",
+            "dataset_name": "student_data",
+            "dataset_profile_v2": {
+                "data_version_id": "raw_v1",
+                "columns": [],
+            },
+            "dataset_summary": {
+                "data_version_id": "raw_v1",
+                "n_rows": 3,
+                "n_cols": 2,
+            },
+            "capability_map": {
+                "data_version_id": "raw_v1",
+                "capabilities": [],
+            },
+            "source": "upload",
+        },
+        "dataset_summary": {
+            "data_version_id": "raw_v1",
+            "n_rows": 3,
+            "n_cols": 2,
+        },
+        "data_versions": [
+            {
+                "version_id": "raw_v1",
+                "path": "data.parquet",
+            }
+        ],
+        "active_data_version_id": "raw_v1",
+        "observations": [],
+        "analysis_runs": [],
+        "repair_attempts": [],
+    }
+
+    snapshot = build_ui_snapshot(state)
+
+    assert "dataset_context" not in snapshot
+    assert "dataset_context" not in snapshot["data"]
+    assert snapshot["data"]["active_data_version_id"] == "raw_v1"
+    assert snapshot["data"]["dataset_summary"]["n_rows"] == 3
+
+    json.dumps(snapshot)
+
+
+def test_build_ui_snapshot_uses_refreshed_mutation_dataset_summary():
+    state = {
+        "active_data_version_id": "data_v_cleaned",
+        "dataset_summary": {
+            "data_version_id": "data_v_cleaned",
+            "n_rows": 3,
+            "n_cols": 2,
+        },
+        "dataset_context": {
+            "data_version_id": "data_v_cleaned",
+            "dataset_name": "student_data",
+            "dataset_profile_v2": {
+                "data_version_id": "data_v_cleaned",
+                "columns": [],
+            },
+            "dataset_summary": {
+                "data_version_id": "data_v_cleaned",
+                "n_rows": 3,
+                "n_cols": 2,
+            },
+            "capability_map": {
+                "data_version_id": "data_v_cleaned",
+                "capabilities": [],
+            },
+            "source": "mutation_refresh",
+        },
+        "data_versions": [
+            {
+                "version_id": "raw_v1",
+                "path": "raw.parquet",
+            },
+            {
+                "version_id": "data_v_cleaned",
+                "path": "cleaned.parquet",
+            },
+        ],
+        "observations": [],
+        "analysis_runs": [],
+        "repair_attempts": [],
+    }
+
+    snapshot = build_ui_snapshot(state)
+
+    assert snapshot["data"]["active_data_version_id"] == "data_v_cleaned"
+    assert snapshot["data"]["dataset_summary"]["data_version_id"] == "data_v_cleaned"
+    assert snapshot["data"]["dataset_summary"]["n_rows"] == 3
+    assert "dataset_context" not in snapshot
+    assert "dataset_context" not in snapshot["data"]
+
+    json.dumps(snapshot)
+
+
 def test_build_ui_snapshot_for_pending_plan_state():
     state = {
         "pending_plan": {

@@ -1,4 +1,4 @@
-from core.deliverables.contracts import TaskContract, normalize_task_contract
+from core.deliverables.contracts import DeliverableGateContract, normalize_task_contract
 from core.deliverables.evidence import (
     extract_final_answer_content_from_state,
     get_deliverable_evidence,

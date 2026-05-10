@@ -1,3 +1,4 @@
+from core.analysis_tool_plugins.result_builder import build_analysis_run_for_plugin
 import pandas as pd
 
 from core.analysis_tool_plugins import get_plugin
@@ -42,7 +43,7 @@ def test_chi_square_unified_execute_and_analysis_run():
     assert "observed_table" in raw["details"]
     assert "expected_table" in raw["details"]
 
-    run = plugin.build_analysis_run(
+    run = build_analysis_run_for_plugin(plugin,
         action_id="act_test",
         arguments={
             "row_col": "sex",

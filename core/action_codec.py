@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from core.schema import ActionProposal
+from core.services.task_contracts import task_contract_to_state_dict
 
 
 def normalize_action_payload(action: Any) -> dict | None:
@@ -40,6 +41,11 @@ def normalize_action_payload(action: Any) -> dict | None:
 
     if not payload.get("arguments"):
         payload["arguments"] = {}
+
+    if payload.get("task_contract"):
+        payload["task_contract"] = task_contract_to_state_dict(
+            payload.get("task_contract"),
+        )
 
     return payload
 

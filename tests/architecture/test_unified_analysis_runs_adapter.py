@@ -1,6 +1,6 @@
 from core.analysis_runs import build_analysis_run_from_observation
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.display import (
     DisplayConfig,
     MetricDisplayConfig,
     compact_dict,

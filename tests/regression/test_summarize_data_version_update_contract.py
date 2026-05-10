@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 
+import pandas as pd
+
+from core.data.context_refresh import refresh_dataset_context_from_df
 from core.workflow.nodes.summarization import summarize_node
 
 
@@ -16,13 +19,37 @@ def make_action(
     )
 
 
-def test_summarize_node_applies_data_version_update_to_state_observation_and_analysis_run():
+def test_summarize_node_applies_data_version_update_to_state_observation_and_analysis_run(tmp_path):
+    raw_df = pd.DataFrame({
+        "GPA": [3.0, 3.2, None, 4.0],
+        "SATM": [600, 620, 650, 700],
+        "Sex": ["F", "M", "F", "M"],
+    })
+    cleaned_df = raw_df.dropna(subset=["GPA"]).reset_index(drop=True)
+
+    raw_path = tmp_path / "raw_v1.parquet"
+    cleaned_path = tmp_path / "data_v_cleaned.parquet"
+
+    raw_df.to_parquet(raw_path)
+    cleaned_df.to_parquet(cleaned_path)
+
+    raw_context_updates = refresh_dataset_context_from_df(
+        raw_df,
+        dataset_name="student_data",
+        data_version_id="raw_v1",
+        data_path=str(raw_path),
+    ).to_state_updates(
+        include_dataset_context=True,
+        dataset_name="student_data",
+        source="upload",
+    )
+
     new_version = {
         "version_id": "data_v_cleaned",
         "parent_version_id": "raw_v1",
-        "path": "workspaces/test/data_versions/data_v_cleaned.parquet",
-        "n_rows": 216,
-        "n_cols": 25,
+        "path": str(cleaned_path),
+        "n_rows": int(cleaned_df.shape[0]),
+        "n_cols": int(cleaned_df.shape[1]),
     }
 
     audit_event = {
@@ -67,19 +94,27 @@ def test_summarize_node_applies_data_version_update_to_state_observation_and_ana
         "data_versions": [
             {
                 "version_id": "raw_v1",
-                "path": "workspaces/test/data_versions/raw_v1.parquet",
-                "n_rows": 226,
-                "n_cols": 25,
+                "path": str(raw_path),
+                "n_rows": int(raw_df.shape[0]),
+                "n_cols": int(raw_df.shape[1]),
             }
         ],
         "data_audit_log": [],
         "active_data_version_id": "raw_v1",
+        "dataset_name": "student_data",
         "current_step": 0,
+        **raw_context_updates,
     }
 
     result = summarize_node(state)
 
     assert result["active_data_version_id"] == "data_v_cleaned"
+    assert result["dataset_context"]["data_version_id"] == "data_v_cleaned"
+    assert result["dataset_context"]["source"] == "mutation_refresh"
+    assert result["dataset_profile_v2"]["data_version_id"] == "data_v_cleaned"
+    assert result["dataset_summary"]["data_version_id"] == "data_v_cleaned"
+    assert result["capability_map"]["data_version_id"] == "data_v_cleaned"
+    assert "dataset_context_stale" not in result
 
     assert "data_versions" in result
     assert len(result["data_versions"]) == 2

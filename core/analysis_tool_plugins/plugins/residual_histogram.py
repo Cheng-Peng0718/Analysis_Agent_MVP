@@ -4,15 +4,18 @@ import os
 import uuid
 import warnings
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
-    ArgumentSchema,
-    VariableRoleSpec,
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.arguments import ArgumentSchema
+from core.analysis_tool_plugins.roles import VariableRoleSpec
+from core.analysis_tool_plugins.display import (
     DisplayConfig,
     MetricDisplayConfig,
     compact_dict,

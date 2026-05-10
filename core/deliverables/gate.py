@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
-from core.deliverables.contracts import TaskContract, normalize_task_contract
+from core.deliverables.contracts import (
+    DeliverableGateContract,
+    normalize_task_contract,
+)
 
 from core.deliverables.evidence import (
     as_dict,
@@ -16,7 +20,7 @@ from core.deliverables.evidence import (
     criterion_satisfied_by_final_answer_text,
 )
 
-def _get_contract(state: Any) -> TaskContract:
+def _get_contract(state: Any) -> DeliverableGateContract:
     contract = get_state_value(state, "task_contract")
 
     if contract is None:
@@ -98,6 +102,162 @@ def _available_artifact_kinds(analysis_runs: List[Dict[str, Any]]) -> set[str]:
                 kinds.add(str(kind))
 
     return kinds
+
+
+def _artifact_matches_evidence_key(artifact: Dict[str, Any], evidence_key: str) -> bool:
+    artifact_type = (
+        artifact.get("artifact_type")
+        or artifact.get("type")
+        or artifact.get("kind")
+        or ""
+    )
+    normalized_type = str(artifact_type).lower()
+
+    path = artifact.get("path") or artifact.get("file_path") or artifact.get("name") or ""
+    suffix = Path(str(path)).suffix.lower()
+
+    if evidence_key == "png_artifact":
+        return normalized_type in {"png", "image/png"} or suffix == ".png"
+
+    return evidence_key == normalized_type
+
+
+def _value_has_evidence_key(value: Any, evidence_key: str) -> bool:
+    if isinstance(value, dict):
+        if evidence_key in value and value[evidence_key] not in (None, "", [], {}):
+            return True
+
+        return any(
+            _value_has_evidence_key(child, evidence_key)
+            for child in value.values()
+        )
+
+    if isinstance(value, list):
+        return any(
+            _value_has_evidence_key(child, evidence_key)
+            for child in value
+        )
+
+    return False
+
+
+def _run_has_evidence_key(run: Dict[str, Any], evidence_key: str) -> bool:
+    if evidence_key == "status_ok":
+        return _run_success(run)
+
+    artifacts = run.get("artifacts", []) or []
+
+    if any(
+        _artifact_matches_evidence_key(as_dict(artifact), evidence_key)
+        for artifact in artifacts
+    ):
+        return True
+
+    evidence_scopes = [
+        run.get("metrics"),
+        run.get("tables"),
+        run.get("metadata"),
+        run.get("structured_data"),
+        run.get("raw_data"),
+        run.get("payload"),
+        run.get("result"),
+        run,
+    ]
+
+    return any(
+        _value_has_evidence_key(scope, evidence_key)
+        for scope in evidence_scopes
+        if scope is not None
+    )
+
+
+def _satisfied_evidence_keys(analysis_runs: List[Dict[str, Any]]) -> set[str]:
+    evidence_keys = set()
+
+    for run in analysis_runs:
+        run_dict = as_dict(run)
+
+        if _run_success(run_dict):
+            evidence_keys.add("status_ok")
+
+        for artifact in run_dict.get("artifacts", []) or []:
+            artifact_dict = as_dict(artifact)
+
+            if _artifact_matches_evidence_key(artifact_dict, "png_artifact"):
+                evidence_keys.add("png_artifact")
+
+        for scope_name in [
+            "metrics",
+            "tables",
+            "metadata",
+            "structured_data",
+            "raw_data",
+            "payload",
+            "result",
+        ]:
+            scope = run_dict.get(scope_name)
+
+            if isinstance(scope, dict):
+                evidence_keys.update(
+                    str(key)
+                    for key, value in scope.items()
+                    if value not in (None, "", [], {})
+                )
+
+    return evidence_keys
+
+
+def criterion_satisfied_by_analysis_runs(
+    criterion: str,
+    analysis_runs: List[Dict[str, Any]],
+) -> bool:
+    prefix = "evidence:"
+
+    if not criterion.startswith(prefix):
+        return False
+
+    evidence_key = criterion.removeprefix(prefix).strip()
+
+    if not evidence_key:
+        return False
+
+    return any(
+        _run_has_evidence_key(run, evidence_key)
+        for run in analysis_runs
+    )
+
+
+def _deliverable_satisfied_by_structured_requirements(
+    deliverable: str,
+    contract: DeliverableGateContract,
+    analysis_runs: List[Dict[str, Any]],
+    successful_tools: set[str],
+) -> bool:
+    requirements = contract.deliverable_requirements.get(deliverable)
+
+    if not requirements:
+        return False
+
+    required_tools = requirements.get("required_tools", [])
+    required_evidence = requirements.get("required_evidence", [])
+
+    if not required_tools and not required_evidence:
+        return False
+
+    if any(tool_name not in successful_tools for tool_name in required_tools):
+        return False
+
+    relevant_runs = [
+        run
+        for run in analysis_runs
+        if not required_tools or run.get("tool_name") in required_tools
+    ]
+
+    return all(
+        any(_run_has_evidence_key(run, evidence_key) for run in relevant_runs)
+        for evidence_key in required_evidence
+    )
+
 
 def _get_execution_audit(state: Any) -> Dict[str, Any]:
     return as_dict(get_state_value(state, "execution_audit", {}))
@@ -217,6 +377,7 @@ def evaluate_deliverable_gate_state(state: Any) -> DeliverableGateResult:
     successful_tools = _successful_tools(analysis_runs)
     failed_required = _failed_required_tools(analysis_runs, required_tools)
     artifact_kinds = _available_artifact_kinds(analysis_runs)
+    satisfied_evidence_keys = _satisfied_evidence_keys(analysis_runs)
 
     final_answer_text = extract_final_answer_content_from_state(state)
     satisfied_deliverable_names = get_satisfied_deliverable_names(state)
@@ -228,9 +389,11 @@ def evaluate_deliverable_gate_state(state: Any) -> DeliverableGateResult:
         "required_artifacts": required_artifacts,
         "required_deliverables": required_deliverables,
         "success_criteria": success_criteria,
+        "deliverable_requirements": contract.deliverable_requirements,
         "allow_partial": contract.allow_partial,
         "successful_tools": sorted(successful_tools),
         "artifact_kinds": sorted(artifact_kinds),
+        "satisfied_evidence_keys": sorted(satisfied_evidence_keys),
         "has_final_answer_text": bool(final_answer_text),
         "satisfied_deliverable_names": sorted(satisfied_deliverable_names),
         "satisfied_criterion_names": sorted(satisfied_criterion_names),
@@ -257,13 +420,21 @@ def evaluate_deliverable_gate_state(state: Any) -> DeliverableGateResult:
         else:
             missing.append(label)
 
-    # Contract-level deliverables cannot be considered satisfied
-    # merely because tools ran. They need explicit evidence later.
-    # S10B conservatively marks them missing.
+    # Free-form deliverables still need explicit evidence. Canonical
+    # deliverables can be satisfied by their structured tool/evidence mapping.
     for deliverable in required_deliverables:
         label = f"deliverable:{deliverable}"
 
-        if deliverable in satisfied_deliverable_names or label in satisfied_deliverable_names:
+        if (
+                deliverable in satisfied_deliverable_names
+                or label in satisfied_deliverable_names
+                or _deliverable_satisfied_by_structured_requirements(
+                    deliverable,
+                    contract,
+                    analysis_runs,
+                    successful_tools,
+                )
+        ):
             satisfied.append(label)
         else:
             missing.append(label)
@@ -276,6 +447,7 @@ def evaluate_deliverable_gate_state(state: Any) -> DeliverableGateResult:
         if (
                 criterion in satisfied_criterion_names
                 or label in satisfied_criterion_names
+                or criterion_satisfied_by_analysis_runs(criterion, analysis_runs)
                 or criterion_satisfied_by_final_answer_text(criterion, final_answer_text)
         ):
             satisfied.append(label)

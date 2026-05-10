@@ -1,10 +1,8 @@
 import pandas as pd
 
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
-    ArgumentSchema,
-    VariableRoleSpec,
-)
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.arguments import ArgumentSchema
+from core.analysis_tool_plugins.roles import VariableRoleSpec
 from core.dataset_intelligence.capability_map import build_capability_map
 from core.dataset_intelligence.profiler import profile_dataframe
 
@@ -100,11 +98,9 @@ def test_capability_map_blocks_when_no_compatible_columns():
     assert cap.status == "not_applicable"
     assert cap.warnings
 
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
-    ArgumentSchema,
-    PlanningPolicy,
-)
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.arguments import ArgumentSchema
+from core.analysis_tool_plugins.policy_types import PlanningPolicy
 from core.dataset_intelligence.capability_map import build_capability_map
 from core.dataset_intelligence.profiler import profile_dataframe
 import pandas as pd

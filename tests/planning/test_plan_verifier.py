@@ -1,10 +1,8 @@
 import pandas as pd
 
-from core.analysis_tool_plugins.base import (
-    AnalysisToolPlugin,
-    ArgumentSchema,
-    VariableRoleSpec,
-)
+from core.analysis_tool_plugins.base import AnalysisToolPlugin
+from core.analysis_tool_plugins.arguments import ArgumentSchema
+from core.analysis_tool_plugins.roles import VariableRoleSpec
 from core.dataset_intelligence.profiler import profile_dataframe
 from core.planning.schemas import PlanStep, PlanProposal
 from core.planning.verifier import verify_plan_step, verify_plan

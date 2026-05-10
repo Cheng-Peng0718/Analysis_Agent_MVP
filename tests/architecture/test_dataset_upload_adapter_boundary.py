@@ -46,4 +46,24 @@ def test_dataset_upload_adapter_owns_dataset_upload_boundary():
     assert "def prepare_uploaded_dataset_state" in text
     assert "create_initial_data_version" in text
     assert "build_legacy_dataset_profile_from_df" in text
+    assert "refresh_dataset_context_from_df" in text
     assert "uploaded_dataset_info" in text
+
+
+def test_dataset_upload_adapter_does_not_hand_build_capability_map():
+    text = Path("core/ui_adapter/dataset_upload.py").read_text(encoding="utf-8")
+
+    forbidden = [
+        '"capabilities": [',
+        '"tool_name": "get_summary_stats"',
+        '"tool_name": "run_multiple_regression"',
+        '"tool_name": "clean_data"',
+    ]
+
+    offenders = [
+        item
+        for item in forbidden
+        if item in text
+    ]
+
+    assert offenders == []

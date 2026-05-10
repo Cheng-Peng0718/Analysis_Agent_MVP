@@ -58,3 +58,8 @@ def test_summarize_node_returns_observation_and_analysis_run_delta():
     assert updates["current_execution"] is None
     assert updates["current_verification"] is None
     assert updates["current_step"] == 4
+    assert "dataset_context" not in updates
+    assert "dataset_profile_v2" not in updates
+    assert "dataset_summary" not in updates
+    assert "capability_map" not in updates
+    assert "dataset_context_stale" not in updates

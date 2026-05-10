@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 
 from core.action_access import (
@@ -8,6 +9,7 @@ from core.action_access import (
     get_action_tool_name,
 )
 from core.analysis_runs import build_analysis_run_from_observation
+from core.data.context_refresh import refresh_dataset_context_from_path
 from core.data_versions import (
     extract_data_version_update,
     validate_data_version_update,
@@ -96,6 +98,7 @@ def summarize_node(state: dict):
         new_version = validated_version_update["new_version"]
         new_active_id = validated_version_update["active_data_version_id"]
         audit_event = validated_version_update.get("audit_event")
+        new_data_path = new_version.get("path")
 
         existing_versions = state.get("data_versions", []) or []
         existing_audit_log = state.get("data_audit_log", []) or []
@@ -115,6 +118,34 @@ def summarize_node(state: dict):
         if isinstance(payload, dict):
             payload["active_data_version_id"] = new_active_id
             payload["data_version_id"] = new_active_id
+
+        if (
+            new_data_path
+            and os.path.isfile(new_data_path)
+            and os.access(new_data_path, os.R_OK)
+        ):
+            try:
+                refreshed_context = refresh_dataset_context_from_path(
+                    new_data_path,
+                    dataset_name=state.get("dataset_name", "uploaded_dataset"),
+                    data_version_id=new_active_id,
+                )
+                updates.update(
+                    refreshed_context.to_state_updates(
+                        include_dataset_context=True,
+                        dataset_name=state.get("dataset_name", "uploaded_dataset"),
+                        source="mutation_refresh",
+                    )
+                )
+            except Exception as exc:
+                updates["dataset_context_stale"] = True
+                updates["dataset_context_stale_reason"] = "mutation_refresh_failed"
+                updates["dataset_context_stale_data_version_id"] = new_active_id
+                updates["dataset_context_stale_error"] = str(exc)
+        else:
+            updates["dataset_context_stale"] = True
+            updates["dataset_context_stale_reason"] = "mutation_refresh_failed"
+            updates["dataset_context_stale_data_version_id"] = new_active_id
 
         print(f"[DATA VERSION] active_data_version_id -> {new_active_id}")
 

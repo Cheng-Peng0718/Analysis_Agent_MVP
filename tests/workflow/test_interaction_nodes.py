@@ -10,6 +10,8 @@ def test_intent_router_node_classifies_advisory_request():
     })
 
     assert updates["interaction_intent"] == "advisory"
+    assert updates["intent_decision"]["intent"] == "advisory"
+    assert updates["task_spec"]["goal_type"] == "dataset_overview"
 
 
 def test_advisory_answer_node_returns_advisory_response_without_action():

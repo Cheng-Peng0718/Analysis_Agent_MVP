@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from core.analysis_tool_plugins import PLUGIN_REGISTRY
-from core.analysis_tool_plugins.base import ApplicabilityResult
+from core.analysis_tool_plugins.applicability import ApplicabilityResult
 from core.dataset_intelligence.schemas import (
     AnalysisCapability,
     CapabilityMap,

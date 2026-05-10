@@ -273,3 +273,118 @@ def test_deliverable_gate_does_not_block_on_execution_audit_warning():
         "SUCCESSFUL_ANALYSIS_RUN_MISSING_DATA_VERSION"
         in result.evidence["execution_audit_warning_codes"]
     )
+
+
+def test_deliverable_gate_satisfies_canonical_required_evidence_from_analysis_runs():
+    result = evaluate_deliverable_gate_state({
+        "task_contract": {
+            "contract_id": "contract_1",
+            "user_goal": "Fit a regression model.",
+            "required_deliverables": [
+                {
+                    "deliverable_id": "regression_model",
+                    "satisfied_by": ["run_multiple_regression"],
+                    "required_evidence": [
+                        "status_ok",
+                        "coef_table",
+                        "r_squared",
+                    ],
+                }
+            ],
+        },
+        "analysis_runs": [
+            {
+                "tool_name": "run_multiple_regression",
+                "status": "ok",
+                "success": True,
+                "tables": {
+                    "coef_table": [
+                        {"term": "x", "estimate": 0.5},
+                    ],
+                },
+                "metrics": {
+                    "r_squared": 0.72,
+                },
+            }
+        ],
+    })
+
+    assert result.status == "ok"
+    assert "tool:run_multiple_regression" in result.satisfied
+    assert "deliverable:regression_model" in result.satisfied
+    assert "criterion:evidence:status_ok" in result.satisfied
+    assert "criterion:evidence:coef_table" in result.satisfied
+    assert "criterion:evidence:r_squared" in result.satisfied
+    assert result.evidence["satisfied_evidence_keys"] == [
+        "coef_table",
+        "r_squared",
+        "status_ok",
+    ]
+
+
+def test_deliverable_gate_keeps_canonical_evidence_missing_until_structured_output_exists():
+    result = evaluate_deliverable_gate_state({
+        "task_contract": {
+            "contract_id": "contract_1",
+            "user_goal": "Fit a regression model.",
+            "required_deliverables": [
+                {
+                    "deliverable_id": "regression_model",
+                    "satisfied_by": ["run_multiple_regression"],
+                    "required_evidence": [
+                        "status_ok",
+                        "coef_table",
+                    ],
+                }
+            ],
+        },
+        "analysis_runs": [
+            {
+                "tool_name": "run_multiple_regression",
+                "status": "ok",
+                "success": True,
+                "metrics": {
+                    "r_squared": 0.72,
+                },
+            }
+        ],
+    })
+
+    assert result.status == "needs_more_work"
+    assert "criterion:evidence:status_ok" in result.satisfied
+    assert "criterion:evidence:coef_table" in result.missing
+    assert "deliverable:regression_model" in result.missing
+
+
+def test_deliverable_gate_satisfies_png_artifact_evidence_from_artifacts():
+    result = evaluate_deliverable_gate_state({
+        "task_contract": {
+            "contract_id": "contract_1",
+            "user_goal": "Create a diagnostic plot.",
+            "required_deliverables": [
+                {
+                    "deliverable_id": "diagnostic_plot",
+                    "satisfied_by": ["generate_residual_histogram"],
+                    "required_evidence": ["png_artifact"],
+                }
+            ],
+        },
+        "analysis_runs": [
+            {
+                "tool_name": "generate_residual_histogram",
+                "status": "ok",
+                "success": True,
+                "artifacts": [
+                    {
+                        "artifact_type": "plot",
+                        "path": "plots/residuals.png",
+                    }
+                ],
+            }
+        ],
+    })
+
+    assert result.status == "ok"
+    assert "deliverable:diagnostic_plot" in result.satisfied
+    assert "criterion:evidence:png_artifact" in result.satisfied
+    assert "png_artifact" in result.evidence["satisfied_evidence_keys"]

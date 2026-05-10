@@ -1,22 +1,33 @@
 from __future__ import annotations
 
-from core.interaction_intent import classify_interaction_intent
 from core.responses import make_response_update
+from core.services.interaction_router import (
+    decide_interaction_intent,
+    legacy_interaction_intent_from_decision,
+)
 
 
 def intent_router_node(state: dict):
     user_request = state.get("user_request", "")
-    intent = classify_interaction_intent(user_request)
+    decision = decide_interaction_intent(user_request, state=state)
+    legacy_intent = legacy_interaction_intent_from_decision(decision)
 
     print("\n" + "=" * 40)
     print("[INTENT ROUTER]")
     print(f"user_request = {user_request}")
-    print(f"intent = {intent.value}")
+    print(f"intent = {decision.intent}")
+    print(f"legacy_intent = {legacy_intent}")
     print("=" * 40 + "\n")
 
-    return {
-        "interaction_intent": intent.value,
+    updates = {
+        "interaction_intent": legacy_intent,
+        "intent_decision": decision.model_dump(),
     }
+
+    if decision.task_spec is not None:
+        updates["task_spec"] = decision.task_spec.model_dump()
+
+    return updates
 
 
 def advisory_answer_node(state: dict):

@@ -304,7 +304,10 @@ def validate_plugin_action(action, profile=None) -> VerificationResult:
         # This is safe because canonicalization is plugin-owned and non-LLM.
         action.arguments = canonical_arguments
 
-    if plugin.requires_confirmation:
+    requires_confirmation = bool(getattr(plugin, "requires_confirmation", False))
+    mutates_data = bool(getattr(plugin, "mutates_data", False))
+
+    if requires_confirmation or mutates_data:
         return VerificationResult(
             action_id=getattr(action, "action_id", "unknown"),
             status="needs_review",
@@ -316,7 +319,8 @@ def validate_plugin_action(action, profile=None) -> VerificationResult:
             details={
                 "tool_name": tool_name,
                 "canonical_arguments": canonical_arguments,
-                "requires_confirmation": True,
+                "requires_confirmation": requires_confirmation,
+                "mutates_data": mutates_data,
             },
         )
 
@@ -329,5 +333,6 @@ def validate_plugin_action(action, profile=None) -> VerificationResult:
             "tool_name": tool_name,
             "canonical_arguments": canonical_arguments,
             "requires_confirmation": False,
+            "mutates_data": False,
         },
     )
