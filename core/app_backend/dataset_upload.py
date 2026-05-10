@@ -157,7 +157,6 @@ def initialize_dataset_session_from_file(
         "pending_action": None,
         "human_review_action_hash": None,
         "human_review_rejection_reason": None,
-        "selected_plan_step_id": None,
     }
 
     state.update(

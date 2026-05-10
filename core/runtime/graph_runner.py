@@ -52,3 +52,28 @@ def run_graph_once(
         result = app.invoke(input_state, config=config)
 
     return _as_state_dict(result)
+
+def resume_graph_once(
+    state_update: Dict[str, Any],
+    *,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Resume the canonical LangGraph app from an interrupted checkpoint.
+
+    Used after human review decisions. This must not restart the graph from
+    the entry point.
+    """
+    if not config:
+        raise ValueError("resume_graph_once requires LangGraph config with thread_id.")
+
+    from core.graph import create_graph_app
+
+    app = create_graph_app()
+
+    if state_update:
+        app.update_state(config, state_update)
+
+    result = app.invoke(None, config=config)
+
+    return _as_state_dict(result)

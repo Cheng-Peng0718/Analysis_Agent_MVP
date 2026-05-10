@@ -33,6 +33,7 @@ from core.workflow.nodes.verification import verify_node as _verify_node
 
 __all__ = ["create_graph_app"]
 
+_CHECKPOINTER = MemorySaver()
 # --- Compile graph ---
 workflow = StateGraph(GraphState)
 
@@ -118,7 +119,7 @@ workflow.add_conditional_edges(
     _route_after_review,
     {
         "execute": "execute",
-        "build_context": "build_context",
+        "end": END,
     },
 )
 
@@ -139,11 +140,10 @@ def create_graph_app():
     """
     Build the compiled LangGraph app explicitly.
 
-    Importing core.graph should expose node functions and workflow wiring,
-    but should not compile a global runnable app as an import-time side effect.
+    Importing core.graph should expose workflow wiring, but should not compile
+    a global runnable app as an import-time side effect.
     """
-    memory = MemorySaver()
     return workflow.compile(
-        checkpointer=memory,
+        checkpointer=_CHECKPOINTER,
         interrupt_before=["human_review"],
     )

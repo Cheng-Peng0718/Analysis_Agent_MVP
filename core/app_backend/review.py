@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from core.app_backend.snapshot import build_ui_snapshot
-from core.runtime.graph_runner import run_graph_once
+from core.runtime.graph_runner import resume_graph_once
 
 
 def _as_dict(value: Any) -> Dict[str, Any]:
@@ -136,8 +136,15 @@ def submit_human_review_decision(
         rejection_reason=rejection_reason,
     )
 
-    updated_state = run_graph_once(
-        prepared_state,
+    updated_state = resume_graph_once(
+        {
+            "human_review_decision": prepared_state.get("human_review_decision"),
+            "human_review_action_hash": prepared_state.get("human_review_action_hash"),
+            "human_review_rejection_reason": prepared_state.get(
+                "human_review_rejection_reason"
+            ),
+            "human_review_required": True,
+        },
         config=config,
     )
 

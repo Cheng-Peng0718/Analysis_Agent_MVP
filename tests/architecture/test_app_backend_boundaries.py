@@ -206,3 +206,8 @@ def test_app_backend_exports_review_contract():
 
     for name in expected:
         assert name in text
+
+def test_graph_state_declares_human_review_decision():
+    text = Path("core/state.py").read_text(encoding="utf-8")
+
+    assert "human_review_decision" in text

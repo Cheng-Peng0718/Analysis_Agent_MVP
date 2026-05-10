@@ -1,5 +1,9 @@
-from core.runtime.graph_runner import run_graph_once
+from core.runtime.graph_runner import (
+    resume_graph_once,
+    run_graph_once,
+)
 
 __all__ = [
+    "resume_graph_once",
     "run_graph_once",
 ]

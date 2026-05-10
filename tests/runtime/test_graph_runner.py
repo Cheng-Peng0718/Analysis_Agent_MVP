@@ -73,3 +73,50 @@ def test_graph_runner_does_not_import_workflow_nodes_or_ui():
 
     for item in forbidden:
         assert item not in text
+
+def test_resume_graph_once_updates_checkpoint_and_invokes_none(monkeypatch):
+    seen = {}
+
+    class FakeApp:
+        def update_state(self, config, values):
+            seen["update_config"] = config
+            seen["values"] = values
+
+        def invoke(self, input_state, config=None):
+            seen["invoke_input"] = input_state
+            seen["invoke_config"] = config
+            return {
+                "human_review_required": False,
+                "current_verification": {
+                    "status": "allowed",
+                },
+            }
+
+    monkeypatch.setattr(
+        "core.graph.create_graph_app",
+        lambda: FakeApp(),
+    )
+
+    from core.runtime.graph_runner import resume_graph_once
+
+    result = resume_graph_once(
+        {
+            "human_review_decision": "approved",
+            "human_review_action_hash": "hash123",
+        },
+        config={
+            "configurable": {
+                "thread_id": "session_1",
+            }
+        },
+    )
+
+    assert seen["values"]["human_review_decision"] == "approved"
+    assert seen["values"]["human_review_action_hash"] == "hash123"
+    assert seen["invoke_input"] is None
+    assert seen["invoke_config"] == {
+        "configurable": {
+            "thread_id": "session_1",
+        }
+    }
+    assert result["current_verification"]["status"] == "allowed"

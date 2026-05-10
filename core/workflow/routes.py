@@ -94,14 +94,15 @@ def route_after_verify(state: dict):
 def route_after_review(state: dict):
     """
     After human_review:
-    - if user approved, execute the original pending action
-    - otherwise go back to build_context and let Supervisor rethink/respond
+    - allowed: execute the approved action
+    - needs_review: pause and wait for a valid user decision
+    - missing verification or rejection: end this turn
     """
     vr = state.get("current_verification")
 
     if vr is None:
-        print("[ROUTE AFTER REVIEW] no current_verification -> build_context")
-        return "build_context"
+        print("[ROUTE AFTER REVIEW] no current_verification -> end")
+        return "end"
 
     status = get_verification_status(vr)
 
@@ -110,7 +111,10 @@ def route_after_review(state: dict):
     if status == "allowed":
         return "execute"
 
-    return "build_context"
+    if status == "needs_review":
+        return "end"
+
+    return "end"
 
 def route_after_summarize(state: dict):
     # A single "run the plan" turn executes at most one PlanStep.

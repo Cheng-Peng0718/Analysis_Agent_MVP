@@ -175,30 +175,30 @@ def test_route_after_review_routes_allowed_to_execute():
     }) == "execute"
 
 
-def test_route_after_review_routes_missing_verification_to_build_context():
+def test_route_after_review_routes_missing_verification_to_end():
     assert route_after_review({
         "current_verification": None,
-    }) == "build_context"
+    }) == "end"
 
 
-def test_route_after_review_routes_rejected_to_build_context():
+def test_route_after_review_routes_rejected_to_end():
     assert route_after_review({
         "current_verification": {
             "status": "rejected_recoverable",
             "feedback": "not approved",
             "details": {},
         }
-    }) == "build_context"
+    }) == "end"
 
 
-def test_route_after_review_routes_needs_review_to_build_context():
+def test_route_after_review_routes_needs_review_to_end():
     assert route_after_review({
         "current_verification": {
             "status": "needs_review",
             "feedback": "still waiting",
             "details": {},
         }
-    }) == "build_context"
+    }) == "end"
 
 def test_route_after_summarize_ends_for_pending_plan_action():
     assert route_after_summarize({
@@ -354,3 +354,14 @@ def test_route_after_deliverable_gate_supports_object_status():
     assert route_after_deliverable_gate({
         "deliverable_check": DummyDeliverableCheck(),
     }) == "final_response"
+
+def test_route_after_review_ends_when_still_needs_review():
+    assert route_after_review({
+        "current_verification": {
+            "status": "needs_review",
+        }
+    }) == "end"
+
+
+def test_route_after_review_ends_when_verification_missing():
+    assert route_after_review({}) == "end"

@@ -87,6 +87,7 @@ def test_turn_backend_is_thin_graph_runner_adapter():
         "execute_pending_plan_node",
         "summarize_node",
         "verify_node",
+        "resume_graph_once",
     ]
 
     for phrase in forbidden:
@@ -115,10 +116,29 @@ def test_plan_runner_uses_turn_contract_not_graph_or_nodes():
 def test_review_backend_uses_graph_runner_not_workflow_nodes():
     text = Path("core/app_backend/review.py").read_text(encoding="utf-8")
 
-    assert "run_graph_once" in text
+    assert "resume_graph_once" in text
     assert "build_ui_snapshot" in text
 
     forbidden = [
+        "create_graph_app",
+        "core.workflow.nodes",
+        "human_review_node",
+        "execute_node",
+        "verify_node",
+        "summarize_node",
+    ]
+
+    for phrase in forbidden:
+        assert phrase not in text
+
+def test_review_backend_uses_resume_graph_runner_not_workflow_nodes():
+    text = _read("core/app_backend/review.py")
+
+    assert "resume_graph_once" in text
+    assert "build_ui_snapshot" in text
+
+    forbidden = [
+        "run_graph_once",
         "create_graph_app",
         "core.workflow.nodes",
         "human_review_node",

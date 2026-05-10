@@ -72,6 +72,14 @@ def human_review_node(state: dict):
     submitted_action_hash = state.get("human_review_action_hash")
     expected_action_hash = vr_details.get("action_hash")
 
+    print("\n" + "=" * 40)
+    print("[HUMAN REVIEW DEBUG]")
+    print(f"decision = {human_review_decision}")
+    print(f"submitted_action_hash = {submitted_action_hash}")
+    print(f"expected_action_hash = {expected_action_hash}")
+    print(f"verification_status = {vr_status}")
+    print("=" * 40 + "\n")
+
     if (
         human_review_decision in {"approved", "rejected"}
         and submitted_action_hash
