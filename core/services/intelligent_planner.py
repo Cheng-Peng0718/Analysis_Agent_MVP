@@ -54,6 +54,21 @@ DISALLOWED_FOR_OVERVIEW = {
     "clean_data",
 }
 
+OVERVIEW_STYLE_GOAL_TYPES = {
+    "dataset_overview",
+    "analysis_recommendation",
+    "analysis_planning",
+}
+
+MANIFEST_DRIVEN_GOAL_TYPES = {
+    "dataset_overview",
+    "analysis_recommendation",
+    "analysis_planning",
+    "regression_modeling",
+    "visualization",
+    "data_cleaning",
+}
+
 
 def _make_step_id(tool_name: str) -> str:
     safe_name = tool_name.replace(" ", "_").replace("-", "_")
@@ -260,7 +275,6 @@ def _manifest_for_tool(tool_name: str):
     except Exception:
         return None
 
-
 def _plan_purpose_for_tool(tool_name: str, goal_type: str) -> str:
     manifest = _manifest_for_tool(tool_name)
 
@@ -268,6 +282,35 @@ def _plan_purpose_for_tool(tool_name: str, goal_type: str) -> str:
         return manifest.default_plan_purpose
 
     return _purpose_for_tool(tool_name, goal_type)
+
+def _tools_for_goal(task_spec: TaskSpec, profile: DatasetProfileV2) -> List[str]:
+    goal_type = task_spec.goal_type
+
+    if goal_type in MANIFEST_DRIVEN_GOAL_TYPES:
+        manifest_tools = _tools_for_goal_from_manifest(goal_type)
+
+        if _manifest_selection_is_complete(
+            goal_type=goal_type,
+            manifest_tools=manifest_tools,
+        ):
+            tools = list(manifest_tools)
+        else:
+            tools = _legacy_tools_for_goal(goal_type)
+
+        if goal_type in OVERVIEW_STYLE_GOAL_TYPES:
+            if _numeric_column_count(profile) < 2 and "get_correlation_matrix" in tools:
+                tools.remove("get_correlation_matrix")
+
+        return _sort_selected_tools_by_manifest_order(tools)
+
+    if goal_type == "association_analysis":
+        return _sort_selected_tools_by_manifest_order(
+            _legacy_tools_for_goal(goal_type)
+        )
+
+    return _sort_selected_tools_by_manifest_order(
+        _legacy_tools_for_goal(goal_type)
+    )
 
 
 def _sort_selected_tools_by_manifest_order(tool_names: List[str]) -> List[str]:
@@ -315,6 +358,43 @@ def _tools_for_goal_from_manifest(goal_type: str) -> List[str]:
         ]
     except Exception:
         return []
+
+def _legacy_tools_for_goal(goal_type: str) -> List[str]:
+    if goal_type in OVERVIEW_STYLE_GOAL_TYPES:
+        return list(DATASET_OVERVIEW_TOOLS)
+
+    if goal_type == "regression_modeling":
+        return list(REGRESSION_TOOLS)
+
+    if goal_type == "association_analysis":
+        return list(ASSOCIATION_TOOLS)
+
+    if goal_type == "visualization":
+        return list(VISUALIZATION_TOOLS)
+
+    if goal_type == "data_cleaning":
+        return list(DATA_CLEANING_TOOLS)
+
+    if goal_type == "eda":
+        return list(DATASET_OVERVIEW_TOOLS[:3])
+
+    return list(DATASET_OVERVIEW_TOOLS[:3])
+
+
+def _manifest_selection_is_complete(
+    *,
+    goal_type: str,
+    manifest_tools: List[str],
+) -> bool:
+    if not manifest_tools:
+        return False
+
+    legacy_tools = _legacy_tools_for_goal(goal_type)
+
+    if goal_type not in MANIFEST_DRIVEN_GOAL_TYPES:
+        return False
+
+    return set(legacy_tools).issubset(set(manifest_tools))
 
 
 def _tools_for_goal(task_spec: TaskSpec, profile: DatasetProfileV2) -> List[str]:
