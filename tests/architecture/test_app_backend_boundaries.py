@@ -63,3 +63,26 @@ def test_turn_backend_uses_graph_runner_and_snapshot_contracts_only():
 
     for phrase in forbidden:
         assert phrase not in text
+
+def test_plan_runner_uses_turn_contract_not_workflow_nodes():
+    text = Path("core/app_backend/plan_runner.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "run_user_turn" in text
+    assert "build_ui_snapshot" in text
+
+    forbidden = [
+        "create_graph_app",
+        "run_graph_once",
+        "core.workflow.nodes",
+        "execute_pending_plan_node",
+        "verify_node",
+        "execute_node",
+        "summarize_node",
+        "streamlit",
+        "st.",
+    ]
+
+    for phrase in forbidden:
+        assert phrase not in text
