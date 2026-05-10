@@ -57,6 +57,10 @@ class LLMPlanStepDraft(BaseModel):
     required_user_choices: List[str] = Field(default_factory=list)
     expected_deliverables: List[str] = Field(default_factory=list)
 
+    # LLM may explain why a step is not executable yet.
+    status: str = "needs_user_choice"
+    warnings: List[str] = Field(default_factory=list)
+
 
 class LLMPlanDraft(BaseModel):
     user_goal: str = ""

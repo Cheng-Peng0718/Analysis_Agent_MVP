@@ -39,3 +39,11 @@ def test_llm_planner_contracts_do_not_import_runtime_or_ui():
 
     for item in forbidden:
         assert item not in text
+
+def test_llm_plan_draft_normalization_boundary_exists():
+    text = Path("core/services/llm_planner.py").read_text(encoding="utf-8")
+
+    assert "def normalize_llm_plan_draft" in text
+    assert "LLMPlanDraft" in text
+    assert "PlanProposal(" in text
+    assert "verify_plan(plan, dataset_profile)" in text

@@ -2,7 +2,12 @@ import pandas as pd
 
 from core.data.context_refresh import refresh_dataset_context_from_df
 from core.services.llm_planner import build_llm_planner_input, create_llm_plan_from_state
-
+from core.services.llm_planner import (
+    build_llm_planner_input,
+    create_llm_plan_from_state,
+    normalize_llm_plan_draft,
+)
+from core.services.llm_planner_contracts import LLMPlanDraft, LLMPlanStepDraft
 
 def _state():
     refreshed = refresh_dataset_context_from_df(
@@ -87,3 +92,114 @@ def test_create_llm_plan_from_state_returns_plan_proposal():
         "needs_clarification",
         "blocked",
     }
+
+def test_normalize_llm_plan_draft_builds_verified_plan_from_valid_tool_step():
+    state = _state()
+
+    draft = LLMPlanDraft(
+        user_goal="Fit a regression model.",
+        summary="Plan a regression and diagnostics workflow.",
+        assumptions=[
+            "The user selected GPA as outcome and SATM as predictor.",
+        ],
+        steps=[
+            LLMPlanStepDraft(
+                title="Fit linear regression",
+                tool_name="run_multiple_regression",
+                purpose="Estimate the relationship between SATM and GPA.",
+                rationale="Both variables are numeric and suitable for a simple regression.",
+                status="ready",
+                arguments={
+                    "target_col": "GPA",
+                    "feature_cols": ["SATM"],
+                },
+                variables={
+                    "target_col": "GPA",
+                    "feature_cols": ["SATM"],
+                },
+            ),
+        ],
+    )
+
+    plan = normalize_llm_plan_draft(
+        draft=draft,
+        state=state,
+    )
+
+    assert plan.plan_id.startswith("plan_")
+    assert plan.steps
+    assert plan.steps[0].tool_name == "run_multiple_regression"
+    assert plan.steps[0].arguments == {
+        "target_col": "GPA",
+        "feature_cols": ["SATM"],
+    }
+    assert plan.steps[0].requires_confirmation is False
+    assert plan.steps[0].mutates_data is False
+    assert plan.steps[0].expected_deliverables == ["regression_model"]
+
+
+def test_normalize_llm_plan_draft_moves_unknown_tool_to_blocked():
+    state = _state()
+
+    draft = LLMPlanDraft(
+        user_goal="Run an invented tool.",
+        summary="This draft includes an invalid tool.",
+        steps=[
+            LLMPlanStepDraft(
+                title="Invented analysis",
+                tool_name="invented_tool",
+                purpose="This should not be executable.",
+                rationale="The tool does not exist.",
+                status="ready",
+                arguments={},
+            ),
+        ],
+    )
+
+    plan = normalize_llm_plan_draft(
+        draft=draft,
+        state=state,
+    )
+
+    assert plan.steps == []
+    assert plan.blocked_or_not_recommended
+    assert plan.blocked_or_not_recommended[0].tool_name == "invented_tool"
+    assert plan.blocked_or_not_recommended[0].status in {
+        "blocked",
+        "not_applicable",
+    }
+
+
+def test_normalize_llm_plan_draft_preserves_required_choices_for_missing_arguments():
+    state = _state()
+
+    draft = LLMPlanDraft(
+        user_goal="Fit a regression model.",
+        summary="Regression needs variable choices.",
+        steps=[
+            LLMPlanStepDraft(
+                title="Fit linear regression",
+                tool_name="run_multiple_regression",
+                purpose="Fit a regression model.",
+                rationale="This requires an outcome and predictors.",
+                status="needs_user_choice",
+                arguments={},
+                required_user_choices=[
+                    "target_col",
+                    "feature_cols",
+                ],
+            ),
+        ],
+    )
+
+    plan = normalize_llm_plan_draft(
+        draft=draft,
+        state=state,
+    )
+
+    assert plan.steps
+    step = plan.steps[0]
+    assert step.tool_name == "run_multiple_regression"
+    assert "target_col" in step.required_user_choices
+    assert "feature_cols" in step.required_user_choices
+    assert step.execution_ready is False

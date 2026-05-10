@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict, List
+
+from core.dataset_intelligence.schemas import CapabilityMap, DatasetProfileV2
+from core.planning.schemas import PlanProposal, PlanStep
+from core.planning.verifier import verify_plan
 
 from core.analysis_tool_plugins import PLUGIN_REGISTRY, ensure_plugins_loaded
 from core.analysis_tool_plugins.manifest import build_tool_manifests
 from core.planning.schemas import PlanProposal
 from core.services.intelligent_planner import create_plan_from_state
 from core.services.llm_planner_contracts import (
+    LLMPlanDraft,
     LLMPlannerDatasetView,
     LLMPlannerInput,
     LLMPlannerToolView,
@@ -143,6 +149,229 @@ def build_llm_planner_input(state: Dict[str, Any]) -> LLMPlannerInput:
             "Mutating tools require explicit user confirmation before execution.",
         ],
     )
+
+def _make_step_id(tool_name: str | None) -> str:
+    safe_name = (tool_name or "non_tool_step").replace(" ", "_").replace("-", "_")
+    return f"step_{safe_name}_{uuid.uuid4().hex[:6]}"
+
+
+def _manifest_index_by_tool() -> Dict[str, Any]:
+    ensure_plugins_loaded()
+    manifests = build_tool_manifests(dict(PLUGIN_REGISTRY))
+    return dict(manifests)
+
+
+def _capability_index_by_tool(capability_map: CapabilityMap) -> Dict[str, Any]:
+    return {
+        capability.tool_name: capability
+        for capability in capability_map.capabilities
+    }
+
+
+def _merge_unique_strings(*values: List[str]) -> List[str]:
+    result = []
+
+    for items in values:
+        for item in items or []:
+            if isinstance(item, str) and item and item not in result:
+                result.append(item)
+
+    return result
+
+
+def _sanitize_arguments(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        key: value
+        for key, value in dict(arguments or {}).items()
+        if value is not None and value != "" and value != []
+    }
+
+
+def _draft_step_to_plan_step(
+    draft_step: LLMPlanStepDraft,
+    *,
+    capability_map: CapabilityMap,
+) -> PlanStep:
+    manifests = _manifest_index_by_tool()
+    capabilities = _capability_index_by_tool(capability_map)
+
+    tool_name = draft_step.tool_name
+
+    manifest = manifests.get(tool_name) if tool_name else None
+    capability = capabilities.get(tool_name) if tool_name else None
+
+    title = draft_step.title
+    if not title and capability is not None:
+        title = capability.display_name
+    if not title and manifest is not None:
+        title = manifest.display_name
+    if not title:
+        title = tool_name or "Planner note"
+
+    method_family = "general"
+    if capability is not None:
+        method_family = capability.method_family
+    elif manifest is not None:
+        method_family = manifest.method_family
+
+    requires_confirmation = False
+    mutates_data = False
+    if manifest is not None:
+        requires_confirmation = manifest.requires_confirmation
+        mutates_data = manifest.mutates_data
+    elif capability is not None:
+        requires_confirmation = capability.requires_confirmation
+        mutates_data = capability.mutates_data
+
+    capability_status = capability.status if capability is not None else "not_applicable"
+
+    status = draft_step.status or capability_status
+    if status not in {
+        "needs_user_choice",
+        "ready",
+        "blocked",
+        "not_applicable",
+        "not_recommended",
+        "completed",
+        "failed",
+    }:
+        status = capability_status
+
+    required_user_choices = _merge_unique_strings(
+        draft_step.required_user_choices,
+        capability.required_user_choices if capability is not None else [],
+    )
+
+    execution_ready = (
+        tool_name is not None
+        and capability is not None
+        and status == "ready"
+        and not required_user_choices
+        and not requires_confirmation
+    )
+
+    purpose = draft_step.purpose or (
+        manifest.default_plan_purpose
+        if manifest is not None
+        else ""
+    )
+
+    rationale = draft_step.rationale or purpose
+
+    warnings = _merge_unique_strings(
+        draft_step.warnings,
+        capability.warnings if capability is not None else [],
+    )
+
+    expected_deliverables = _merge_unique_strings(
+        draft_step.expected_deliverables,
+        manifest.expected_deliverables if manifest is not None else [],
+    )
+
+    return PlanStep(
+        step_id=_make_step_id(tool_name),
+        title=title,
+        purpose=purpose,
+        goal=purpose,
+        rationale=rationale,
+        tool_name=tool_name,
+        method_family=method_family,
+        status=status,
+        execution_ready=execution_ready,
+        variables=_sanitize_arguments(draft_step.variables),
+        arguments=_sanitize_arguments(draft_step.arguments),
+        candidate_variables=(
+            capability.candidate_variables
+            if capability is not None
+            else {}
+        ),
+        required_user_choices=required_user_choices,
+        applicability_check=(
+            {
+                "status": capability.status,
+                "reason": capability.reason,
+            }
+            if capability is not None
+            else {
+                "status": "not_applicable",
+                "reason": "Tool is not available in the current capability map.",
+            }
+        ),
+        warnings=warnings,
+        suggested_alternatives=(
+            capability.suggested_alternatives
+            if capability is not None
+            else []
+        ),
+        expected_deliverables=expected_deliverables,
+        requires_confirmation=requires_confirmation,
+        mutates_data=mutates_data,
+    )
+
+
+def normalize_llm_plan_draft(
+    *,
+    draft: LLMPlanDraft,
+    state: Dict[str, Any],
+) -> PlanProposal:
+    """
+    Normalize an LLM-produced plan draft into the canonical PlanProposal contract.
+
+    The LLM may propose a plan, but this function owns:
+    - PlanProposal construction;
+    - PlanStep construction;
+    - capability/tool metadata merge;
+    - execution readiness;
+    - final verify_plan call.
+    """
+    capability_map = CapabilityMap.model_validate(state.get("capability_map"))
+    dataset_profile = DatasetProfileV2.model_validate(state.get("dataset_profile_v2"))
+
+    steps = [
+        _draft_step_to_plan_step(
+            step,
+            capability_map=capability_map,
+        )
+        for step in draft.steps
+    ]
+
+    blocked_steps = [
+        step
+        for step in steps
+        if step.status in {
+            "blocked",
+            "not_applicable",
+            "not_recommended",
+        }
+    ]
+
+    active_steps = [
+        step
+        for step in steps
+        if step.status not in {
+            "blocked",
+            "not_applicable",
+            "not_recommended",
+        }
+    ]
+
+    plan = PlanProposal(
+        plan_id=f"plan_{uuid.uuid4().hex[:8]}",
+        user_goal=draft.user_goal,
+        user_request=state.get("user_request", ""),
+        task_spec=None,
+        data_version_id=capability_map.data_version_id,
+        mode="plan_only",
+        status="draft",
+        summary=draft.summary or "Generated an LLM-planned analysis plan.",
+        assumptions=draft.assumptions,
+        warnings=draft.warnings,
+        steps=active_steps,
+        blocked_or_not_recommended=blocked_steps,
+        requires_user_confirmation_before_execution=True,
+    )
+
+    return verify_plan(plan, dataset_profile)
 
 
 def create_llm_plan_from_state(state: Dict[str, Any]) -> PlanProposal:
