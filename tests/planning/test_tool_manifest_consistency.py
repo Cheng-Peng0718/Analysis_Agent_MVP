@@ -208,6 +208,21 @@ def test_manifest_exposes_task_argument_bindings_for_planner():
         "strategy",
     ]
 
+    assert manifests["generate_scatterplot"].task_argument_bindings == [
+        {
+            "task_field": "predictor_variables",
+            "index": 0,
+            "argument": "x_column",
+            "required_choice": "x_column",
+        },
+        {
+            "task_field": "predictor_variables",
+            "index": 1,
+            "argument": "y_column",
+            "required_choice": "y_column",
+        },
+    ]
+
 
 def test_planner_can_build_arguments_from_manifest_task_bindings(monkeypatch):
     manifest = ToolManifest(
@@ -291,6 +306,46 @@ def test_correlation_test_manifest_bindings_report_missing_choices():
     )
 
     assert missing == ["y_col"]
+
+def test_scatterplot_arguments_are_built_from_manifest_bindings():
+    arguments = planner._step_arguments_for_task(
+        "generate_scatterplot",
+        TaskSpec(
+            goal_type="visualization",
+            user_goal="Visualize association.",
+            predictor_variables=["GPA", "SATM"],
+        ),
+    )
+
+    assert arguments == {
+        "x_column": "GPA",
+        "y_column": "SATM",
+    }
+
+
+def test_scatterplot_manifest_bindings_report_missing_choices():
+    from core.dataset_intelligence.schemas import AnalysisCapability
+
+    capability = AnalysisCapability(
+        tool_name="generate_scatterplot",
+        display_name="Scatterplot",
+        method_family="visualization",
+        status="needs_user_choice",
+        reason="Needs selected variables.",
+        required_user_choices=[],
+    )
+
+    missing = planner._required_choices_for_task(
+        capability,
+        TaskSpec(
+            goal_type="visualization",
+            user_goal="Visualize association.",
+            predictor_variables=["GPA"],
+        ),
+    )
+
+    assert missing == ["y_column"]
+
 
 def test_current_planner_does_not_populate_manifest_expected_deliverables():
     profile, capability_map = _context(pd.DataFrame({

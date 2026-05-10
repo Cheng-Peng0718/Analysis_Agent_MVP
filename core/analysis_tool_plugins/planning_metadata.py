@@ -39,6 +39,21 @@ PAIRWISE_CORRELATION_TASK_ARGUMENT_BINDINGS = [
 ]
 
 
+SCATTERPLOT_TASK_ARGUMENT_BINDINGS = [
+    {
+        "task_field": "predictor_variables",
+        "index": 0,
+        "argument": "x_column",
+        "required_choice": "x_column",
+    },
+    {
+        "task_field": "predictor_variables",
+        "index": 1,
+        "argument": "y_column",
+        "required_choice": "y_column",
+    },
+]
+
 TOOL_PLANNING_METADATA = {
     "inspect_dataset": {
         "supported_goal_types": ["dataset_overview", "analysis_recommendation", "analysis_planning", "eda"],
@@ -115,6 +130,7 @@ TOOL_PLANNING_METADATA = {
         "planning_tags": ["association", "visualization", "scatterplot"],
         "default_plan_purpose": "Visualize the selected variables.",
         "expected_deliverables": ["scatterplot"],
+        "task_argument_bindings": SCATTERPLOT_TASK_ARGUMENT_BINDINGS,
         "plan_order": 10,
     },
     "clean_data": {

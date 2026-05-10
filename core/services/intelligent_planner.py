@@ -210,6 +210,9 @@ def _step_variables_for_task(tool_name: str, task_spec: TaskSpec) -> Dict[str, o
 def _step_arguments_for_task(tool_name: str, task_spec: TaskSpec) -> Dict[str, object]:
     variables = _step_variables_for_task(tool_name, task_spec)
 
+    if _tool_has_manifest_planning_bindings(tool_name):
+        return dict(variables)
+
     if tool_name == "generate_scatterplot":
         return {
             "x_column": variables.get("x_col"),
