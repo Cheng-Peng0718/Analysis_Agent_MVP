@@ -48,6 +48,20 @@ def build_ui_snapshot(state: Dict[str, Any]) -> Dict[str, Any]:
     assistant_response = _as_dict(state.get("assistant_response"))
 
     current_verification = _as_dict(state.get("current_verification"))
+
+    pending_action = _as_dict(state.get("pending_action")) or _as_dict(
+        state.get("current_action")
+    )
+
+    verification_details = current_verification.get("details")
+    if not isinstance(verification_details, dict):
+        verification_details = {}
+
+    verification_status = current_verification.get("status")
+    review_required = bool(state.get("human_review_required")) or (
+            verification_status == "needs_review"
+    )
+
     current_execution = _as_dict(state.get("current_execution"))
 
     return {
@@ -79,8 +93,14 @@ def build_ui_snapshot(state: Dict[str, Any]) -> Dict[str, Any]:
             "execution_audit": _as_dict(state.get("execution_audit")),
         },
         "review": {
-            "human_review_required": bool(state.get("human_review_required")),
+            "human_review_required": review_required,
             "current_verification": current_verification or None,
+            "pending_action": pending_action or None,
+            "action_hash": (
+                state.get("human_review_action_hash")
+                or verification_details.get("action_hash")
+            ),
+            "feedback": current_verification.get("feedback"),
         },
         "metadata": {
             "current_step": state.get("current_step"),

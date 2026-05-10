@@ -194,3 +194,15 @@ def test_tabular_reader_centralizes_excel_engine_selection():
     assert 'engine="openpyxl"' in text
     assert 'engine="xlrd"' in text
     assert "SUPPORTED_TABULAR_EXTENSIONS" in text
+
+def test_app_backend_exports_review_contract():
+    text = Path("core/app_backend/__init__.py").read_text(encoding="utf-8")
+
+    expected = [
+        "approve_pending_review",
+        "reject_pending_review",
+        "get_pending_review",
+    ]
+
+    for name in expected:
+        assert name in text

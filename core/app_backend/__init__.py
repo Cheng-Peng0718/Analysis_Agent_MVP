@@ -9,6 +9,13 @@ from core.app_backend.session import (
 )
 from core.app_backend.snapshot import build_ui_snapshot
 from core.app_backend.turn import run_user_turn
+from core.app_backend.review import (
+    approve_pending_review,
+    get_pending_review,
+    prepare_human_review_decision_state,
+    reject_pending_review,
+    submit_human_review_decision,
+)
 
 __all__ = [
     "AppSession",
@@ -20,4 +27,9 @@ __all__ = [
     "normalize_session_id",
     "run_pending_plan_until_pause",
     "run_user_turn",
+    "approve_pending_review",
+    "get_pending_review",
+    "prepare_human_review_decision_state",
+    "reject_pending_review",
+    "submit_human_review_decision",
 ]

@@ -7,6 +7,7 @@ APP_BACKEND_FILES = [
     "core/app_backend/turn.py",
     "core/app_backend/plan_runner.py",
     "core/app_backend/snapshot.py",
+    "core/app_backend/review.py",
 ]
 
 
@@ -106,6 +107,24 @@ def test_plan_runner_uses_turn_contract_not_graph_or_nodes():
         "execute_analysis_tool",
         "summarize_node",
         "verify_node",
+    ]
+
+    for phrase in forbidden:
+        assert phrase not in text
+
+def test_review_backend_uses_graph_runner_not_workflow_nodes():
+    text = Path("core/app_backend/review.py").read_text(encoding="utf-8")
+
+    assert "run_graph_once" in text
+    assert "build_ui_snapshot" in text
+
+    forbidden = [
+        "create_graph_app",
+        "core.workflow.nodes",
+        "human_review_node",
+        "execute_node",
+        "verify_node",
+        "summarize_node",
     ]
 
     for phrase in forbidden:

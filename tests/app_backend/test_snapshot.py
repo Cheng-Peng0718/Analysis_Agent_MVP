@@ -77,3 +77,24 @@ def test_build_ui_snapshot_tolerates_missing_sections():
     assert snapshot["plan"]["pending_plan"] is None
     assert snapshot["analysis"]["observations"] == []
     assert snapshot["review"]["human_review_required"] is False
+
+def test_build_ui_snapshot_marks_needs_review_verification_as_review_required():
+    snapshot = build_ui_snapshot({
+        "current_action": {
+            "action_id": "act_clean",
+            "tool_name": "clean_data",
+        },
+        "current_verification": {
+            "status": "needs_review",
+            "feedback": "Approval required.",
+            "details": {
+                "action_hash": "hash123",
+            },
+        },
+        "human_review_required": False,
+    })
+
+    assert snapshot["review"]["human_review_required"] is True
+    assert snapshot["review"]["action_hash"] == "hash123"
+    assert snapshot["review"]["pending_action"]["tool_name"] == "clean_data"
+    assert snapshot["review"]["feedback"] == "Approval required."
