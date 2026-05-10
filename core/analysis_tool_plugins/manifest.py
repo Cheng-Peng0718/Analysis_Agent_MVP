@@ -64,9 +64,29 @@ def _manifest_value(value: Any) -> Any:
 
     return value
 
+def _is_meaningful_planning_value(value: Any) -> bool:
+    return value not in (None, "", [], {})
+
+
+def _planning_metadata_for_plugin(plugin: AnalysisToolPlugin) -> Dict[str, Any]:
+    central = dict(TOOL_PLANNING_METADATA.get(plugin.tool_name, {}))
+
+    local_raw = getattr(plugin, "planning_metadata", None)
+    local = _manifest_value(local_raw)
+
+    if not isinstance(local, dict):
+        return central
+
+    merged = dict(central)
+
+    for key, value in local.items():
+        if _is_meaningful_planning_value(value):
+            merged[key] = value
+
+    return merged
 
 def build_tool_manifest(plugin: AnalysisToolPlugin) -> ToolManifest:
-    planning_metadata = TOOL_PLANNING_METADATA.get(plugin.tool_name, {})
+    planning_metadata = _planning_metadata_for_plugin(plugin)
 
     return ToolManifest(
         tool_name=plugin.tool_name,

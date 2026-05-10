@@ -13,7 +13,7 @@ from core.analysis_tool_plugins.policy_types import (
 )
 from core.analysis_tool_plugins.roles import VariableRoleSpec
 from core.analysis_tool_plugins.types import ExecuteFn, ExtractorFn, GuardrailFn
-
+from core.analysis_tool_plugins.planning_contracts import PlanningMetadata
 
 @dataclass
 class AnalysisToolPlugin:
@@ -38,6 +38,7 @@ class AnalysisToolPlugin:
     versioning_policy: VersioningPolicy = field(default_factory=VersioningPolicy)
     repair_policy: RepairPolicy = field(default_factory=RepairPolicy)
     planning_policy: PlanningPolicy = field(default_factory=PlanningPolicy)
+    planning_metadata: PlanningMetadata = field(default_factory=PlanningMetadata)
 
     def run(self, context) -> dict:
         if self.execute is None:

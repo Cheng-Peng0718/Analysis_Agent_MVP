@@ -25,6 +25,7 @@ from core.analysis_tool_plugins.policies import (
     NON_MUTATING_VERSIONING,
     DEFAULT_ANALYSIS_REPAIR,
 )
+from core.analysis_tool_plugins.planning_contracts import PlanningMetadata
 
 def _ok(message: str, details: Dict[str, Any], artifacts=None):
     return {
@@ -382,6 +383,40 @@ PLUGIN = register_plugin(AnalysisToolPlugin(
     ],
 
     planning_policy=NEEDS_USER_VARIABLES_PLANNING,
+
+    planning_metadata=PlanningMetadata(
+        supported_goal_types=[
+            "regression_modeling",
+        ],
+        not_recommended_for_goal_types=[
+            "dataset_overview",
+            "analysis_recommendation",
+            "analysis_planning",
+        ],
+        planning_tags=[
+            "regression",
+            "modeling",
+            "inferential",
+        ],
+        default_plan_purpose="Fit the requested regression model.",
+        expected_deliverables=[
+            "regression_model",
+        ],
+        task_argument_bindings=[
+            {
+                "task_field": "target_variables",
+                "index": 0,
+                "argument": "target_col",
+                "required_choice": "target_col",
+            },
+            {
+                "task_field": "predictor_variables",
+                "argument": "feature_cols",
+                "required_choice": "feature_cols",
+            },
+        ],
+        plan_order=10,
+    ),
 
     # Linear model does not mutate data.
     mutates_data=False,
