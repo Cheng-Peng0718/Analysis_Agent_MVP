@@ -202,7 +202,7 @@ def normalize_interaction_draft(
     )
 
 
-def legacy_interaction_intent_from_decision(decision: IntentDecision) -> str:
+def route_intent_from_decision(decision: IntentDecision) -> str:
     if decision.intent == "advisory":
         return "advisory"
 

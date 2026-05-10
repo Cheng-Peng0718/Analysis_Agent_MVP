@@ -3,7 +3,7 @@ from core.services.llm_interaction_parser import (
     build_llm_interaction_input,
     decide_llm_interaction_intent,
     generate_llm_interaction_draft,
-    legacy_interaction_intent_from_decision,
+    route_intent_from_decision,
 )
 from core.services.llm_interaction_contracts import LLMInteractionDraft
 
@@ -87,21 +87,21 @@ def test_decide_llm_interaction_intent_uses_structured_draft(monkeypatch):
     assert decision.task_spec.predictor_variables == ["SATM"]
 
 
-def test_legacy_route_mapping_from_llm_intent_decision():
+def test_route_mapping_from_llm_intent_decision():
     assert (
-        legacy_interaction_intent_from_decision(
+        route_intent_from_decision(
             IntentDecision(intent="plan_analysis", confidence=0.9)
         )
         == "plan_only"
     )
     assert (
-        legacy_interaction_intent_from_decision(
+        route_intent_from_decision(
             IntentDecision(intent="direct_analysis", confidence=0.9)
         )
         == "direct_tool"
     )
     assert (
-        legacy_interaction_intent_from_decision(
+        route_intent_from_decision(
             IntentDecision(intent="modify_data", confidence=0.9)
         )
         == "direct_tool"

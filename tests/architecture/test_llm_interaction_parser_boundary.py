@@ -33,3 +33,16 @@ def test_llm_interaction_parser_does_not_import_workflow_or_ui():
 
     for item in forbidden:
         assert item not in text
+
+def test_llm_interaction_parser_does_not_use_legacy_route_mapper_name():
+    text = Path("core/services/llm_interaction_parser.py").read_text(
+        encoding="utf-8"
+    )
+    node_text = Path("core/workflow/nodes/interaction.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "legacy_interaction_intent_from_decision" not in text
+    assert "legacy_interaction_intent_from_decision" not in node_text
+    assert "route_intent_from_decision" in text
+    assert "route_intent_from_decision" in node_text
