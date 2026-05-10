@@ -79,3 +79,22 @@ def test_ui_state_owns_session_state_helpers():
     assert "def ensure_session_state" in text
     assert "def current_snapshot" in text
     assert "def sync_assistant_response_to_chat" in text
+
+
+def test_renderers_own_analysis_result_rendering():
+    text = Path("ui/renderers.py").read_text(encoding="utf-8")
+    panels_text = Path("ui/panels.py").read_text(encoding="utf-8")
+
+    expected = [
+        "def render_report_block",
+        "def render_report_blocks",
+        "def render_analysis_run",
+        "def render_table_payload",
+        "def render_metric_payload",
+        "def render_artifact_payload",
+    ]
+
+    for phrase in expected:
+        assert phrase in text
+
+    assert "render_analysis_run" in panels_text

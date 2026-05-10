@@ -15,6 +15,7 @@ from ui.renderers import (
     render_json_expander,
     render_key_value_captions,
     rows_from_column_profile,
+    render_analysis_run,
 )
 from ui.state import (
     add_message,
@@ -175,29 +176,7 @@ def render_analysis_panel(snapshot: Dict[str, Any]) -> None:
         return
 
     for run in runs:
-        title = run.get("tool_name") or run.get("run_id") or "Analysis run"
-        status = run.get("status")
-
-        with st.expander(f"{title} · {status}", expanded=True):
-            if run.get("summary"):
-                st.write(run["summary"])
-
-            report_blocks = run.get("report_blocks") or []
-            if report_blocks:
-                st.write("Report blocks")
-                st.json(report_blocks)
-
-            if run.get("metrics"):
-                st.write("Metrics")
-                st.json(run["metrics"])
-
-            if run.get("tables"):
-                st.write("Tables")
-                st.json(run["tables"])
-
-            if run.get("artifacts"):
-                st.write("Artifacts")
-                st.json(run["artifacts"])
+        render_analysis_run(run)
 
     if observations:
         render_json_expander("Observation history", observations, expanded=False)
