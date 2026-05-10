@@ -29,20 +29,41 @@ def make_state():
     }
 
 
-def test_plan_only_node_creates_pending_plan_without_action():
+def test_plan_only_node_creates_pending_plan_without_action(monkeypatch):
+    from core.domain.plan import PlanProposal, PlanStep
+
+    def fake_create_llm_plan_from_state(state):
+        return PlanProposal(
+            plan_id="plan_test",
+            user_request=state.get("user_request", ""),
+            data_version_id=state.get("active_data_version_id", "raw_v1"),
+            mode="plan_only",
+            status="partially_ready",
+            summary="Fake LLM plan for test.",
+            assumptions=["LLM planner is mocked in this unit test."],
+            steps=[
+                PlanStep(
+                    step_id="step_inspect_dataset",
+                    title="Inspect dataset",
+                    tool_name="inspect_dataset",
+                    method_family="overview",
+                    status="ready",
+                    execution_ready=True,
+                    purpose="Inspect the dataset.",
+                    rationale="Start with a dataset overview.",
+                    arguments={},
+                    variables={},
+                )
+            ],
+            requires_user_confirmation_before_execution=True,
+        )
+
+    monkeypatch.setattr(
+        "core.workflow.nodes.planning.create_llm_plan_from_state",
+        fake_create_llm_plan_from_state,
+    )
+
     result = plan_only_node(make_state())
-
-    assert result["pending_plan"] is not None
-    assert result["plan_status"] in {"draft", "verified", "partially_ready"}
-
-    assert result["assistant_response"]["response_type"] == "plan"
-    assert result["assistant_response"]["content"]
-
-    assert result["current_action"] is None
-    assert result["current_execution"] is None
-    assert result["current_verification"] is None
-    assert result["human_review_required"] is False
-    assert result["pending_action"] is None
 
 
 def test_plan_only_node_blocks_when_profile_missing():

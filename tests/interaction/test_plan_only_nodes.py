@@ -33,9 +33,41 @@ def make_state():
     }
 
 
-def test_plan_only_node_does_not_create_action():
-    state = make_state()
+def test_plan_only_node_does_not_create_action(monkeypatch):
+    from core.domain.plan import PlanProposal, PlanStep
 
+    def fake_create_llm_plan_from_state(state):
+        return PlanProposal(
+            plan_id="plan_test",
+            user_request=state.get("user_request", ""),
+            data_version_id=state.get("active_data_version_id", "raw_v1"),
+            mode="plan_only",
+            status="partially_ready",
+            summary="Fake LLM plan for test.",
+            assumptions=["LLM planner is mocked in this unit test."],
+            steps=[
+                PlanStep(
+                    step_id="step_inspect_dataset",
+                    title="Inspect dataset",
+                    tool_name="inspect_dataset",
+                    method_family="overview",
+                    status="ready",
+                    execution_ready=True,
+                    purpose="Inspect the dataset.",
+                    rationale="Start with a dataset overview.",
+                    arguments={},
+                    variables={},
+                )
+            ],
+            requires_user_confirmation_before_execution=True,
+        )
+
+    monkeypatch.setattr(
+        "core.workflow.nodes.planning.create_llm_plan_from_state",
+        fake_create_llm_plan_from_state,
+    )
+
+    state = make_state()
     result = plan_only_node(state)
 
     assert result["pending_plan"] is not None
