@@ -22,6 +22,7 @@ class LLMPlannerToolView(BaseModel):
     requires_confirmation: bool = False
     mutates_data: bool = False
     expected_deliverables: List[str] = Field(default_factory=list)
+    wait_for_step_tags: List[str] = Field(default_factory=list)
 
 
 class LLMPlannerDatasetView(BaseModel):

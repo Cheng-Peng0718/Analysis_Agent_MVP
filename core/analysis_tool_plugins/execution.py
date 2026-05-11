@@ -3,7 +3,11 @@ from typing import Any, Dict
 
 from core.schema import ActionProposal, ToolExecutionResult, AgentContext
 from core.analysis_tool_plugins import get_plugin
-
+from core.action_access import (
+    get_action_arguments,
+    get_action_id,
+    get_action_tool_name,
+)
 
 def _normalize_tool_result_payload(result_payload: Any) -> Dict[str, Any]:
     if not isinstance(result_payload, dict):
@@ -36,17 +40,23 @@ def _payload_from_result_payload(result_payload: Dict[str, Any]) -> Dict[str, An
 
     return payload
 
-
-def execute_analysis_tool(action: ActionProposal, context_pkg) -> ToolExecutionResult:
+def execute_analysis_tool(action: Any, context_pkg) -> ToolExecutionResult:
     """
     Unified execution entrypoint.
 
     Only core.analysis_tool_plugins is authoritative for tool execution.
+    Accepts both ActionProposal objects and JSON-safe dict actions.
     """
     execution_id = f"exec_{uuid.uuid4().hex[:8]}"
-    tool_name = action.tool_name
+
+    tool_name = get_action_tool_name(action)
+    action_id = get_action_id(action) or "unknown"
+    arguments = get_action_arguments(action) or {}
 
     try:
+        if not tool_name:
+            raise ValueError("tool_name is missing.")
+
         plugin = get_plugin(tool_name)
 
         if plugin is None:
@@ -63,13 +73,13 @@ def execute_analysis_tool(action: ActionProposal, context_pkg) -> ToolExecutionR
 
         context = AgentContext(
             workspace_dir=workspace_dir,
-            arguments=action.arguments,
+            arguments=arguments,
             data_versions=getattr(context_pkg, "data_versions", []) or [],
             active_data_version_id=getattr(context_pkg, "active_data_version_id", None),
             data_audit_log=getattr(context_pkg, "data_audit_log", []) or [],
         )
 
-        print(f"Running plugin tool: {tool_name}, arguments: {action.arguments}")
+        print(f"Running plugin tool: {tool_name}, arguments: {arguments}")
 
         result_payload = plugin.run(context)
         result_payload = _normalize_tool_result_payload(result_payload)
@@ -84,7 +94,7 @@ def execute_analysis_tool(action: ActionProposal, context_pkg) -> ToolExecutionR
 
         return ToolExecutionResult(
             execution_id=execution_id,
-            action_id=action.action_id,
+            action_id=action_id,
             tool_name=tool_name,
             success=success,
             status=status,
@@ -100,7 +110,7 @@ def execute_analysis_tool(action: ActionProposal, context_pkg) -> ToolExecutionR
 
         return ToolExecutionResult(
             execution_id=execution_id,
-            action_id=getattr(action, "action_id", "unknown"),
+            action_id=action_id,
             tool_name=tool_name,
             success=False,
             status="failed",

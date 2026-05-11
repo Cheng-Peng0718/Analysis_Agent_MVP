@@ -16,11 +16,15 @@ from core.data_versions import (
 )
 from core.execution_codec import normalize_execution_view
 from core.planning.execution_queue import mark_plan_step_after_execution
+from core.responses import make_assistant_response
 from core.workflow.audit_runtime import attach_execution_audit
 from core.workflow.repair_runtime import attach_repair_after_summarize
 
 
 def summarize_node(state: dict):
+    action_origin = state.get("action_origin")
+    current_plan_step_id_before_summarize = state.get("current_plan_step_id")
+
     current_action = state.get("current_action")
     tool_name = get_action_tool_name(current_action, "unknown_tool")
     arguments = get_action_arguments(current_action)
@@ -87,6 +91,10 @@ def summarize_node(state: dict):
         "current_verification": None,
         "human_review_required": False,
         "pending_action": None,
+
+        "last_summarized_action_origin": action_origin,
+        "last_summarized_plan_step_id": current_plan_step_id_before_summarize,
+
 
         "current_step": state.get("current_step", 0) + 1,
     }
@@ -179,6 +187,32 @@ def summarize_node(state: dict):
             f"[PLAN EXECUTION] step {current_plan_step_id} "
             f"marked as {'completed' if success else 'failed'}"
         )
+
+    if action_origin == "direct_tool":
+        response_type = "final_answer" if success else "error"
+        content = (
+            f"I ran `{tool_name}` with status `{status}`. "
+            f"{message or 'The result has been added to Analysis Results.'}"
+        )
+
+        if success:
+            content += "\n\nSee the Analysis Results panel for metrics, tables, and artifacts."
+
+        updates["assistant_response"] = make_assistant_response(
+            response_type=response_type,
+            content=content,
+            source_node="summarize",
+            data_version_id=state.get("active_data_version_id"),
+            artifacts=artifacts,
+            metadata={
+                "tool_name": tool_name,
+                "execution_id": execution_id,
+                "status": status,
+                "success": success,
+            },
+        )
+
+        updates["action_origin"] = None
 
     updates = attach_repair_after_summarize(
         state=state,

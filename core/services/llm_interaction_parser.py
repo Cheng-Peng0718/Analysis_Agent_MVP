@@ -101,6 +101,8 @@ def build_llm_interaction_input(
             "Do not choose a concrete tool. Produce a high-level TaskSpec only.",
             "Use dataset columns only if they are present in the dataset view.",
             "If the user asks to run an existing plan, use intent execute_plan.",
+            "If an existing_pending_plan has steps needing user choices and the user supplies those missing variables or operation choices, use intent clarification.",
+            "For clarification, fill target_variables, predictor_variables, grouping_variables, and constraints.role_arguments using the plugin role/argument names from the pending plan when possible.",
             "If the user asks for a plan or recommendations, use intent plan_analysis.",
             "If the user asks to modify data, use intent modify_data.",
             "If the user asks for a direct analysis, use intent direct_analysis.",
@@ -180,6 +182,7 @@ def normalize_interaction_draft(
         "plan_analysis",
         "direct_analysis",
         "modify_data",
+        "clarification",
     }:
         task_spec = TaskSpec(
             goal_type=draft.goal_type or "analysis_recommendation",

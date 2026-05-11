@@ -17,10 +17,23 @@ def route_after_intent(state: dict):
     if intent == "execute_plan":
         return "execute_pending_plan"
 
+    if intent == "end":
+        return "end"
+
     # Direct tool requests and unknown requests go to the unified supervisor path.
     return "supervisor"
 
 def route_after_execute_pending_plan(state: dict):
+    # PlanRunController may prepare a pending review directly. Route to
+    # human_review so LangGraph's interrupt_before=["human_review"] creates a
+    # resumable checkpoint for the UI approval/rejection flow.
+    if state.get("human_review_required") is True:
+        return "human_review"
+
+    verification = state.get("current_verification")
+    if verification is not None and get_verification_status(verification) == "needs_review":
+        return "human_review"
+
     action = state.get("current_action")
 
     if action is not None:
@@ -117,9 +130,18 @@ def route_after_review(state: dict):
     return "end"
 
 def route_after_summarize(state: dict):
-    # A single "run the plan" turn executes at most one PlanStep.
-    # If the action came from pending_plan, stop after summarize.
-    if state.get("action_origin") == "pending_plan":
+    # Pending-plan and direct-tool turns should not re-enter the planner with
+    # the same user_request after a successful tool execution.
+    #
+    # Important: summarize_node may clear action_origin after archiving the
+    # result, so route using last_summarized_action_origin as the stable
+    # post-summarize provenance marker.
+    action_origin = (
+        state.get("action_origin")
+        or state.get("last_summarized_action_origin")
+    )
+
+    if action_origin in {"pending_plan", "direct_tool"}:
         return "end"
 
     if state.get("current_step", 0) >= state.get("max_steps", 12):

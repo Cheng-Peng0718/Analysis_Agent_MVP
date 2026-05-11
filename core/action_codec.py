@@ -53,14 +53,24 @@ def normalize_action_payload(action: Any) -> dict | None:
 def action_to_state_dict(action: Any) -> dict | None:
     """
     Convert an action to a JSON-safe dict for state storage.
+
+    task_contract is intentionally not stored inside current_action.
+    It should be extracted by supervisor_node and stored separately as
+    state["task_contract"].
     """
     payload = normalize_action_payload(action)
 
     if payload is None:
         return None
 
-    # Validate once, then dump back to a clean dict.
-    return ActionProposal.model_validate(payload).model_dump()
+    payload = dict(payload)
+    payload.pop("task_contract", None)
+
+    cleaned = ActionProposal.model_validate(payload).model_dump()
+
+    cleaned.pop("task_contract", None)
+
+    return cleaned
 
 
 def action_from_state(action: Any) -> ActionProposal | None:

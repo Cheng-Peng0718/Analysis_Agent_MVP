@@ -163,7 +163,141 @@ def test_execute_pending_plan_creates_action_for_ready_step():
     result = execute_pending_plan_node(state)
 
     assert result["current_action"] is not None
-    assert result["current_action"].tool_name == "get_summary_stats"
-    assert result["current_action"].arguments == {}
+    assert result["current_action"]["tool_name"] == "get_summary_stats"
+    assert result["current_action"]["arguments"] == {}
     assert result["current_plan_step_id"] == "s1"
     assert result["plan_execution_status"] == "started_step"
+
+def test_find_next_executable_step_skips_completed_steps():
+    plan = {
+        "plan_id": "plan_test",
+        "steps": [
+            {
+                "step_id": "s1",
+                "tool_name": "inspect_dataset",
+                "status": "ready",
+                "execution_ready": True,
+                "execution_status": "completed",
+                "arguments": {},
+            },
+            {
+                "step_id": "s2",
+                "tool_name": "get_summary_stats",
+                "status": "ready",
+                "execution_ready": True,
+                "arguments": {},
+            },
+        ],
+    }
+
+    step, readiness = find_next_executable_step(plan)
+
+    assert step["step_id"] == "s2"
+    assert readiness.executable is True
+
+def test_mark_plan_not_completed_when_unfinished_non_ready_steps_remain():
+    plan = {
+        "plan_id": "plan_test",
+        "status": "executing",
+        "steps": [
+            {
+                "step_id": "s1",
+                "tool_name": "inspect_dataset",
+                "status": "ready",
+                "execution_ready": True,
+                "execution_status": "running",
+                "arguments": {},
+            },
+            {
+                "step_id": "s2",
+                "tool_name": "run_multiple_regression",
+                "status": "needs_user_choice",
+                "execution_ready": False,
+                "arguments": {},
+                "required_user_choices": [
+                    {
+                        "role": "outcome",
+                        "reason": "Choose outcome variable.",
+                    }
+                ],
+            },
+        ],
+    }
+
+    updated = mark_plan_step_after_execution(
+        plan,
+        step_id="s1",
+        success=True,
+        execution_id="exec_1",
+        message="ok",
+    )
+
+    assert updated["steps"][0]["execution_status"] == "completed"
+    assert updated["status"] == "partially_executed"
+
+def test_mark_plan_completed_only_when_all_steps_done():
+    plan = {
+        "plan_id": "plan_test",
+        "status": "executing",
+        "steps": [
+            {
+                "step_id": "s1",
+                "tool_name": "inspect_dataset",
+                "status": "ready",
+                "execution_ready": True,
+                "execution_status": "running",
+                "arguments": {},
+            },
+            {
+                "step_id": "s2",
+                "tool_name": "get_summary_stats",
+                "status": "ready",
+                "execution_ready": True,
+                "execution_status": "completed",
+                "arguments": {},
+            },
+        ],
+    }
+
+    updated = mark_plan_step_after_execution(
+        plan,
+        step_id="s1",
+        success=True,
+        execution_id="exec_1",
+        message="ok",
+    )
+
+    assert updated["status"] == "completed"
+
+def test_find_next_executable_step_reports_unfinished_blocker_after_completed_steps():
+    plan = {
+        "plan_id": "plan_test",
+        "steps": [
+            {
+                "step_id": "s1",
+                "tool_name": "inspect_dataset",
+                "status": "ready",
+                "execution_ready": True,
+                "execution_status": "completed",
+                "arguments": {},
+            },
+            {
+                "step_id": "s2",
+                "tool_name": "clean_data",
+                "status": "needs_user_choice",
+                "execution_ready": False,
+                "execution_status": "not_started",
+                "arguments": {},
+                "required_user_choices": ["action_type", "strategy"],
+            },
+        ],
+    }
+
+    step, readiness = find_next_executable_step(plan)
+
+    assert step is None
+    assert readiness is not None
+    assert readiness.executable is False
+    assert "action_type" in readiness.missing_user_choices
+    assert "strategy" in readiness.missing_user_choices
+    assert "already has execution_status=completed" not in readiness.reason

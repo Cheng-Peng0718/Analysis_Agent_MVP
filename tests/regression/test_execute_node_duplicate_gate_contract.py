@@ -90,6 +90,7 @@ def test_execute_node_blocks_duplicate_real_analysis_run(tmp_path):
                 "strategy": "rows",
             },
             "status": "ok",
+            "data_version_id": state.get("active_data_version_id"),
         }
     ]
 

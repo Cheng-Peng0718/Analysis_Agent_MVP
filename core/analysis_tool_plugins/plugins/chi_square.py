@@ -450,6 +450,20 @@ PLUGIN = register_plugin(AnalysisToolPlugin(
         expected_deliverables=[
             "categorical_association_test",
         ],
+        task_argument_bindings=[
+            {
+                "task_field": "target_variables",
+                "index": 0,
+                "argument": "row_col",
+                "required_choice": "row_col",
+            },
+            {
+                "task_field": "predictor_variables",
+                "index": 0,
+                "argument": "col_col",
+                "required_choice": "col_col",
+            },
+        ],
         plan_order=10,
     ),
 

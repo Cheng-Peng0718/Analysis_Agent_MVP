@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from core.dataset_intelligence.schemas import CapabilityMap, DatasetProfileV2
 from core.planning.schemas import PlanProposal, PlanStep
@@ -113,6 +113,7 @@ def build_llm_planner_input(state: Dict[str, Any]) -> LLMPlannerInput:
             requires_confirmation=manifest.requires_confirmation,
             mutates_data=manifest.mutates_data,
             expected_deliverables=manifest.expected_deliverables,
+            wait_for_step_tags=manifest.wait_for_step_tags,
         )
         for manifest in manifests.values()
     ]
@@ -247,10 +248,148 @@ def _sanitize_arguments(arguments: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _is_missing_value(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _task_value_from_binding(
+    *,
+    task_spec: Dict[str, Any],
+    binding: Dict[str, Any],
+) -> Any:
+    task_field = binding.get("task_field")
+
+    if not task_field:
+        return None
+
+    value = task_spec.get(task_field)
+
+    index = binding.get("index")
+
+    if index is not None:
+        try:
+            if isinstance(value, list):
+                return value[int(index)]
+        except Exception:
+            return None
+
+    return value
+
+
+def _apply_manifest_argument_template(
+    *,
+    manifest: Any,
+    arguments: Dict[str, Any],
+) -> Dict[str, Any]:
+    merged = dict(getattr(manifest, "argument_template", {}) or {})
+    merged.update(arguments or {})
+    return _sanitize_arguments(merged)
+
+
+def _apply_task_argument_bindings(
+    *,
+    manifest: Any,
+    task_spec: Optional[Dict[str, Any]],
+    variables: Dict[str, Any],
+    arguments: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Bind high-level TaskSpec fields into plugin arguments using the plugin's
+    own planning metadata. This keeps method-specific argument mapping out of
+    graph nodes and prevents hard-coded "regression target/predictor" logic.
+    """
+    if manifest is None or not task_spec:
+        return variables, arguments
+
+    variables = dict(variables or {})
+    arguments = dict(arguments or {})
+
+    for binding in getattr(manifest, "task_argument_bindings", []) or []:
+        if not isinstance(binding, dict):
+            continue
+
+        argument_name = binding.get("argument")
+
+        if not argument_name:
+            continue
+
+        if not _is_missing_value(arguments.get(argument_name)):
+            continue
+
+        value = _task_value_from_binding(
+            task_spec=task_spec,
+            binding=binding,
+        )
+
+        if _is_missing_value(value):
+            continue
+
+        arguments[argument_name] = value
+
+        if _is_missing_value(variables.get(argument_name)):
+            variables[argument_name] = value
+
+    return _sanitize_arguments(variables), _sanitize_arguments(arguments)
+
+
+def _sync_variable_role_arguments(
+    *,
+    manifest: Any,
+    variables: Dict[str, Any],
+    arguments: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    The LLM may place selected columns under either `variables` or `arguments`.
+    The canonical PlanStep must carry them in both places for verification and
+    execution-readiness to agree.
+    """
+    variables = dict(variables or {})
+    arguments = dict(arguments or {})
+
+    if manifest is None:
+        return _sanitize_arguments(variables), _sanitize_arguments(arguments)
+
+    for role in getattr(manifest, "variable_roles", []) or []:
+        if not isinstance(role, dict):
+            continue
+
+        role_name = role.get("role_name")
+
+        if not role_name:
+            continue
+
+        value = arguments.get(role_name)
+
+        if _is_missing_value(value):
+            value = variables.get(role_name)
+
+        if _is_missing_value(value):
+            continue
+
+        arguments[role_name] = value
+        variables[role_name] = value
+
+    # Also sync explicit non-column planning choices from policy metadata.
+    for choice in getattr(manifest, "required_planning_choices", []) or []:
+        value = arguments.get(choice)
+
+        if _is_missing_value(value):
+            value = variables.get(choice)
+
+        if _is_missing_value(value):
+            continue
+
+        arguments[choice] = value
+        variables[choice] = value
+
+    return _sanitize_arguments(variables), _sanitize_arguments(arguments)
+
+
 def _draft_step_to_plan_step(
     draft_step: LLMPlanStepDraft,
     *,
     capability_map: CapabilityMap,
+    task_spec: Optional[Dict[str, Any]] = None,
 ) -> PlanStep:
     manifests = _manifest_index_by_tool()
     capabilities = _capability_index_by_tool(capability_map)
@@ -328,6 +467,28 @@ def _draft_step_to_plan_step(
         manifest.expected_deliverables if manifest is not None else [],
     )
 
+    variables = _sanitize_arguments(draft_step.variables)
+    arguments = _sanitize_arguments(draft_step.arguments)
+
+    if manifest is not None:
+        arguments = _apply_manifest_argument_template(
+            manifest=manifest,
+            arguments=arguments,
+        )
+
+    variables, arguments = _apply_task_argument_bindings(
+        manifest=manifest,
+        task_spec=task_spec,
+        variables=variables,
+        arguments=arguments,
+    )
+
+    variables, arguments = _sync_variable_role_arguments(
+        manifest=manifest,
+        variables=variables,
+        arguments=arguments,
+    )
+
     return PlanStep(
         step_id=_make_step_id(tool_name),
         title=title,
@@ -338,8 +499,8 @@ def _draft_step_to_plan_step(
         method_family=method_family,
         status=status,
         execution_ready=execution_ready,
-        variables=_sanitize_arguments(draft_step.variables),
-        arguments=_sanitize_arguments(draft_step.arguments),
+        variables=variables,
+        arguments=arguments,
         candidate_variables=(
             capability.candidate_variables
             if capability is not None
@@ -386,11 +547,13 @@ def normalize_llm_plan_draft(
     """
     capability_map = CapabilityMap.model_validate(state.get("capability_map"))
     dataset_profile = DatasetProfileV2.model_validate(state.get("dataset_profile_v2"))
+    task_spec = _as_dict(state.get("task_spec")) or None
 
     steps = [
         _draft_step_to_plan_step(
             step,
             capability_map=capability_map,
+            task_spec=task_spec,
         )
         for step in draft.steps
     ]
@@ -419,7 +582,7 @@ def normalize_llm_plan_draft(
         plan_id=f"plan_{uuid.uuid4().hex[:8]}",
         user_goal=draft.user_goal,
         user_request=state.get("user_request", ""),
-        task_spec=None,
+        task_spec=state.get("task_spec"),
         data_version_id=capability_map.data_version_id,
         mode="plan_only",
         status="draft",

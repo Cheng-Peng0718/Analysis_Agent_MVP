@@ -24,7 +24,7 @@ st.set_page_config(
 def render_layout() -> None:
     snapshot = current_snapshot()
 
-    left, center, right = st.columns([0.9, 1.55, 1.15], gap="large")
+    left, center, right = st.columns([0.85, 1.55, 1.15], gap="large")
 
     with left:
         render_upload_panel()
@@ -39,9 +39,9 @@ def render_layout() -> None:
         render_plan_panel(snapshot)
 
     with right:
-        render_analysis_panel(snapshot)
-        st.divider()
         render_review_panel(snapshot)
+        st.divider()
+        render_analysis_panel(snapshot)
 
 
 def main() -> None:

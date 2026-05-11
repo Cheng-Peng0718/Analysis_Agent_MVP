@@ -14,6 +14,8 @@ def test_streamlit_ui_uses_app_backend_public_api_only():
         "initialize_dataset_session_from_file",
         "run_user_turn",
         "run_pending_plan_until_pause",
+        "approve_pending_review",
+        "reject_pending_review",
     ]
 
     for name in expected:

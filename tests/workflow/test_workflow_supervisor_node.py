@@ -31,8 +31,8 @@ def test_supervisor_node_sets_current_action(monkeypatch):
         "max_steps": 12,
     })
 
-    assert updates["current_action"].action_id == "act_1"
-    assert updates["current_action"].tool_name == "get_summary_stats"
+    assert updates["current_action"]["action_id"] == "act_1"
+    assert updates["current_action"]["tool_name"] == "get_summary_stats"
     assert "task_contract" not in updates
 
 
@@ -70,6 +70,8 @@ def test_supervisor_node_extracts_task_contract_from_dict_action(monkeypatch):
         "required_tools": ["get_summary_stats"],
         "required_deliverables": ["brief summary"],
     }
+    assert updates["current_action"]["action_type"] == "final_answer"
+    assert "task_contract" not in updates["current_action"]
 
 
 def test_supervisor_node_passes_existing_task_contract_to_context(monkeypatch):

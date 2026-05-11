@@ -14,10 +14,21 @@ TERMINAL_PLAN_STATUSES = {
 }
 
 PAUSE_PLAN_EXECUTION_STATUSES = {
+    # No plan / no runnable continuation.
     "no_pending_plan",
+
+    # New PlanRunController pause states.
+    "waiting_for_user_choices",
+    "awaiting_review",
+    "blocked_no_actionable_step",
+    "blocked_invalid_plan_controller_decision",
+
+    # Verification / execution failure states.
+    "step_verification_failed",
+
+    # Legacy compatibility states. Keep for older tests / stale UI paths.
     "blocked_no_ready_steps",
     "blocked_pending_data_cleaning",
-    "step_verification_failed",
 }
 
 PAUSE_VERIFICATION_STATUSES = {
@@ -122,23 +133,32 @@ def run_pending_plan_until_pause(
     current_state = dict(state or {})
     iterations: List[Dict[str, Any]] = []
 
-    should_pause, reason = should_pause_plan_execution(current_state)
-
-    if should_pause:
-        return {
-            "state": current_state,
-            "snapshot": build_ui_snapshot(current_state),
-            "plan_run": {
-                "status": "paused",
-                "reason": reason,
-                "iterations": iterations,
-                "n_iterations": 0,
-            },
-        }
-
     for index in range(max_iterations):
+        should_pause, reason = should_pause_plan_execution(current_state)
+
+        if should_pause:
+            status = (
+                "completed"
+                if str(reason).startswith("terminal_plan_status:completed")
+                else "paused"
+            )
+
+            return {
+                "state": current_state,
+                "snapshot": build_ui_snapshot(current_state),
+                "plan_run": {
+                    "status": status,
+                    "reason": reason,
+                    "iterations": iterations,
+                    "n_iterations": len(iterations),
+                },
+            }
+
+        command_state = dict(current_state)
+        command_state["_backend_command_for_next_turn"] = "execute_pending_plan"
+
         turn_result = run_user_turn(
-            current_state,
+            command_state,
             execution_message,
             config=config,
         )

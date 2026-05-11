@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from core.analysis_tool_plugins.validation import validate_plugin_action
+from core.verification_codec import verification_to_state_dict
 
 from core.action_access import (
     get_action_arguments,
@@ -56,7 +57,7 @@ def verify_node(state: dict):
         verify_result,
         details=verification_details,
     )
-
+    verification_payload = verification_to_state_dict(verify_result)
     verify_status = get_verification_status(verify_result)
     verify_feedback = get_verification_feedback(verify_result)
     verify_error_code = get_verification_error_code(verify_result)
@@ -94,17 +95,13 @@ def verify_node(state: dict):
                 "details": verify_details,
             },
             raw_data={
-                "verification": (
-                    verify_result.model_dump()
-                    if hasattr(verify_result, "model_dump")
-                    else verify_result
-                ),
+                "verification": verification_payload,
                 "recoverable": verify_status == "rejected_recoverable",
             },
         )
 
         updates = {
-            "current_verification": verify_result,
+            "current_verification": verification_payload,
             "observations": [obs.model_dump()],
         }
 
@@ -165,7 +162,7 @@ def verify_node(state: dict):
         return updates
 
     updates = {
-        "current_verification": verify_result,
+        "current_verification": verification_payload,
         "human_review_required": False,
     }
 

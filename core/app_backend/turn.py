@@ -29,12 +29,24 @@ def prepare_turn_state(
 
     next_state["user_request"] = message
 
+    # Backend commands are internal control signals, not user text. Plan
+    # runner sets _backend_command_for_next_turn before invoking this public
+    # turn adapter. Normal chat turns clear the command so stale execution
+    # intent cannot leak into future messages.
+    next_state["backend_command"] = next_state.pop(
+        "_backend_command_for_next_turn",
+        None,
+    )
+
     # Per-turn outputs should be produced by the graph invocation, not reused
     # from the previous turn.
     next_state["assistant_response"] = {}
     next_state["current_execution"] = None
     next_state["current_verification"] = None
     next_state["execution_audit"] = {}
+
+    next_state["last_summarized_action_origin"] = None
+    next_state["last_summarized_plan_step_id"] = None
 
     return next_state
 

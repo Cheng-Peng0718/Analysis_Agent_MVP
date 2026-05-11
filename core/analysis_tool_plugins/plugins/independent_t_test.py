@@ -402,6 +402,20 @@ PLUGIN = register_plugin(AnalysisToolPlugin(
         expected_deliverables=[
             "group_comparison_test",
         ],
+        task_argument_bindings=[
+            {
+                "task_field": "target_variables",
+                "index": 0,
+                "argument": "target_col",
+                "required_choice": "target_col",
+            },
+            {
+                "task_field": "grouping_variables",
+                "index": 0,
+                "argument": "group_col",
+                "required_choice": "group_col",
+            },
+        ],
         plan_order=10,
     ),
 

@@ -30,6 +30,7 @@ class ToolManifest(BaseModel):
     task_argument_bindings: List[Dict[str, Any]] = Field(default_factory=list)
     required_planning_choices: List[str] = Field(default_factory=list)
     not_recommended_for_goal_types: List[str] = Field(default_factory=list)
+    wait_for_step_tags: List[str] = Field(default_factory=list)
     plan_order: int = 100
 
     has_applicability_checker: bool = False
@@ -101,6 +102,9 @@ def build_tool_manifest(plugin: AnalysisToolPlugin) -> ToolManifest:
         ),
         not_recommended_for_goal_types=_manifest_value(
             planning_metadata.get("not_recommended_for_goal_types", [])
+        ),
+        wait_for_step_tags=_manifest_value(
+            planning_metadata.get("wait_for_step_tags", [])
         ),
         expected_deliverables=_manifest_value(
             planning_metadata.get("expected_deliverables", [])

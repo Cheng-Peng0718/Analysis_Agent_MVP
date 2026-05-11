@@ -52,6 +52,7 @@ def final_response_node(state: dict):
             "current_action": None,
             "current_execution": None,
             "current_verification": None,
+            "action_origin": None,
         })
 
         return updates
@@ -68,6 +69,7 @@ def final_response_node(state: dict):
         "current_action": None,
         "current_execution": None,
         "current_verification": None,
+        "action_origin": None,
     })
 
     return updates

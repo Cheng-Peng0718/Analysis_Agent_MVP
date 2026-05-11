@@ -398,6 +398,9 @@ PLUGIN = register_plugin(AnalysisToolPlugin(
             "modeling",
             "inferential",
         ],
+        wait_for_step_tags=[
+            "data_cleaning",
+        ],
         default_plan_purpose="Fit the requested regression model.",
         expected_deliverables=[
             "regression_model",

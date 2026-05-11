@@ -105,7 +105,7 @@ def make_state():
 def test_modeling_step_is_blocked_until_clean_data_completes():
     result = execute_pending_plan_node(make_state())
 
-    assert result["plan_execution_status"] == "blocked_pending_data_cleaning"
+    assert result["plan_execution_status"] == "waiting_for_user_choices"
     assert result["current_action"] is None
     assert result["current_execution"] is None
     assert result["current_verification"] is None
@@ -113,5 +113,25 @@ def test_modeling_step_is_blocked_until_clean_data_completes():
     response = result["assistant_response"]
 
     assert response["response_type"] == "plan_execution_status"
-    assert response["metadata"]["reason"] == "modeling_blocked_by_pending_cleaning"
-    assert response["metadata"]["tool_name"] == "run_multiple_regression"
+    assert response["metadata"]["reason"] == "waiting_for_user_choices"
+    assert response["metadata"]["tool_name"] == "clean_data"
+
+def test_ready_cleaning_prerequisite_goes_to_review_before_modeling_even_if_later_in_plan():
+    result_state = make_state()
+    clean_step = result_state["pending_plan"]["steps"][1]
+    clean_step["status"] = "ready"
+    clean_step["execution_ready"] = True
+    clean_step["arguments"] = {
+        "action_type": "drop",
+        "strategy": "rows",
+        "columns": ["GPA", "SATM"],
+    }
+    clean_step["required_user_choices"] = []
+
+    result = execute_pending_plan_node(result_state)
+
+    assert result["plan_execution_status"] == "awaiting_review"
+    assert result["human_review_required"] is True
+    assert result["current_plan_step_id"] == "step_clean"
+    assert result["pending_plan"]["status"] == "awaiting_review"
+    assert result["pending_plan"]["steps"][1]["execution_status"] == "awaiting_review"

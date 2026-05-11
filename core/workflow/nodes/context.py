@@ -55,7 +55,7 @@ def build_context_node(state: dict):
         "current_step": step,
         "current_context_text": context.context_text,
 
-        "dataset_profile": new_profile,
+        "dataset_profile": new_profile.model_dump(),
 
         **refreshed_context.to_state_updates(
             include_dataset_context=True,

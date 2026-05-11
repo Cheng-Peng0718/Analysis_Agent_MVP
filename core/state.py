@@ -5,38 +5,45 @@ from core.schema import ActionProposal, DatasetProfile, ToolExecutionResult, Ver
 
 class GraphState(TypedDict):
     user_request: str
-    dataset_profile: Any
-
     workspace_dir: str
 
+    dataset_profile: Any
+    dataset_profile_v2: dict
+    dataset_summary: dict
+    capability_map: dict
+
     observations: Annotated[list, operator.add]
+    analysis_runs: Annotated[list, operator.add]
 
     current_action: Any
     current_execution: Any
     current_verification: Any
     current_step: int
     max_steps: int
-    user_request: str
-    workspace_dir: str
+
     task_contract: Optional[Dict[str, Any]]
     deliverable_check: Optional[Dict[str, Any]]
     deliverable_gate_attempts: int
+
     data_versions: Optional[List[Dict[str, Any]]]
     active_data_version_id: Optional[str]
     data_audit_log: Optional[List[Dict[str, Any]]]
-    analysis_runs: Annotated[list, operator.add]
-    action_origin: str
 
-    interaction_intent: str
+    interaction_intent: Optional[str]
     intent_decision: dict
     task_spec: dict
-    dataset_profile_v2: dict
-    dataset_summary: dict
-    capability_map: dict
-    pending_plan: dict
-    plan_status: str
-    final_answer: str
+    backend_command: Optional[str]
+
+    pending_plan: Optional[Dict[str, Any]]
+    plan_status: Optional[str]
+    plan_execution_status: Optional[str]
+    current_plan_step_id: Optional[str]
+    action_origin: Optional[str]
+    pending_plan_clarification: Optional[Dict[str, Any]]
+
+    final_answer: Optional[str]
     assistant_response: dict
+
     execution_audit: dict
     repair_decision: dict
     repair_attempts: list
@@ -46,6 +53,6 @@ class GraphState(TypedDict):
     latest_ui_event: dict
     human_review_required: bool
     pending_action: Any
-    human_review_action_hash: str
-    human_review_rejection_reason: str
+    human_review_action_hash: Optional[str]
+    human_review_rejection_reason: Optional[str]
     human_review_decision: Optional[str]

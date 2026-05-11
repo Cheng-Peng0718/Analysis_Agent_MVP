@@ -95,8 +95,8 @@ def human_review_node(state: dict):
         return {
             "human_review_required": True,
             "pending_action": action_payload,
-            "current_action": action,
-            "current_verification": vr,
+            "current_action": action_payload,
+            "current_verification": verification_payload,
             "human_review_decision": None,
             "human_review_rejection_reason": None,
             "assistant_response": make_assistant_response(
@@ -188,11 +188,12 @@ def human_review_node(state: dict):
             )
 
         return {
-            "current_verification": approved_vr,
+            "current_verification": verification_to_state_dict(approved_vr),
             "human_review_required": False,
             "pending_action": None,
             "human_review_decision": None,
-            "current_action": action,
+            "human_review_rejection_reason": None,
+            "current_action": action_payload,
         }
 
     if vr_status == "allowed":
@@ -203,8 +204,10 @@ def human_review_node(state: dict):
         return {
             "human_review_required": True,
             "pending_action": action_payload,
-            "current_action": action,
-            "current_verification": vr,
+            "current_action": action_payload,
+            "current_verification": verification_payload,
+            "human_review_decision": None,
+            "human_review_rejection_reason": None,
         }
 
     if vr_status in {"rejected_recoverable", "rejected_terminal"}:

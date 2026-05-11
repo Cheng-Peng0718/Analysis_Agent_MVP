@@ -329,3 +329,123 @@ def render_data_version_timeline(
 
         if index < len(versions) - 1:
             st.markdown("↓")
+
+def compact_version_node(
+    version: Dict[str, Any],
+    *,
+    active_version_id: str | None = None,
+) -> str:
+    version_id = version.get("version_id") or "unknown"
+    is_active = version_id == active_version_id
+    icon = "🟢" if is_active else "⚪"
+    short_id = version_id
+
+    if len(short_id) > 14:
+        short_id = short_id[:11] + "..."
+
+    return f"{icon} `{short_id}`"
+
+
+def compact_version_dot(
+    version: Dict[str, Any],
+    *,
+    active_version_id: str | None = None,
+) -> str:
+    version_id = version.get("version_id")
+    return "🟢" if version_id == active_version_id else "⚪"
+
+def render_compact_data_version_timeline(
+    versions: List[Dict[str, Any]],
+    *,
+    active_version_id: str | None = None,
+) -> None:
+    if not versions:
+        st.caption("No versions yet.")
+        return
+
+    dots = " —— ".join(
+        compact_version_dot(version, active_version_id=active_version_id)
+        for version in versions
+    )
+
+    st.markdown(f"**{dots}**")
+
+    active_version = next(
+        (
+            version
+            for version in versions
+            if version.get("version_id") == active_version_id
+        ),
+        None,
+    )
+
+    if not active_version:
+        return
+
+    created_by = (
+        active_version.get("created_by")
+        or active_version.get("tool_name")
+        or "unknown"
+    )
+    n_rows = active_version.get("n_rows", "—")
+    n_cols = active_version.get("n_cols", "—")
+
+    st.caption(
+        f"Active `{active_version_id}` · {created_by} · "
+        f"{n_rows} rows × {n_cols} cols"
+    )
+
+    if len(versions) > 1:
+        with st.expander("Version details", expanded=False):
+            for version in versions:
+                version_id = version.get("version_id")
+                marker = "🟢" if version_id == active_version_id else "⚪"
+                creator = version.get("created_by") or version.get("tool_name") or "unknown"
+                rows = version.get("n_rows", "—")
+                cols = version.get("n_cols", "—")
+                st.caption(f"{marker} `{version_id}` · {creator} · {rows} × {cols}")
+
+
+def build_agent_activity_items(snapshot: Dict[str, Any]) -> List[str]:
+    items = []
+
+    assistant_response = snapshot.get("assistant_response") or {}
+    response_type = assistant_response.get("response_type")
+    if response_type:
+        items.append(f"Response: `{response_type}`")
+
+    plan = snapshot.get("plan") or {}
+    if plan.get("plan_status"):
+        items.append(f"Plan status: `{plan.get('plan_status')}`")
+
+    review = snapshot.get("review") or {}
+    if review.get("human_review_required"):
+        pending_action = review.get("pending_action") or {}
+        tool_name = pending_action.get("tool_name") or "unknown_tool"
+        items.append(f"Review required for `{tool_name}`")
+
+    analysis = snapshot.get("analysis") or {}
+    runs = analysis.get("analysis_runs") or []
+    if runs:
+        last_run = runs[-1]
+        tool_name = last_run.get("tool_name") or "unknown_tool"
+        status = last_run.get("status")
+        items.append(f"Last tool: `{tool_name}` · `{status}`")
+
+    dataset = snapshot.get("dataset") or {}
+    active_version = dataset.get("active_data_version_id")
+    if active_version:
+        items.append(f"Active data: `{active_version}`")
+
+    return items
+
+
+def render_agent_activity(snapshot: Dict[str, Any]) -> None:
+    items = build_agent_activity_items(snapshot)
+
+    if not items:
+        return
+
+    with st.expander("Agent Activity", expanded=False):
+        for item in items:
+            st.markdown(f"- {item}")

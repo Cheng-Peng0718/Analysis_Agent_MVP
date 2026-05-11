@@ -5,6 +5,7 @@ from ui.renderers import (
     metric_rows_from_payload,
     table_rows_from_payload,
     version_label,
+    build_agent_activity_items,
 )
 
 
@@ -104,3 +105,36 @@ def test_data_version_rows_normalizes_versions_for_display():
     assert rows[1]["version_id"] == "data_v0002"
     assert rows[1]["parent_version_id"] == "raw_v1"
     assert rows[1]["tool_name"] == "clean_data"
+
+def test_build_agent_activity_items_from_snapshot():
+    items = build_agent_activity_items({
+        "assistant_response": {
+            "response_type": "final_answer",
+        },
+        "plan": {
+            "plan_status": "completed",
+        },
+        "review": {
+            "human_review_required": True,
+            "pending_action": {
+                "tool_name": "clean_data",
+            },
+        },
+        "analysis": {
+            "analysis_runs": [
+                {
+                    "tool_name": "clean_data",
+                    "status": "ok",
+                }
+            ],
+        },
+        "dataset": {
+            "active_data_version_id": "data_v123",
+        },
+    })
+
+    assert "Response: `final_answer`" in items
+    assert "Plan status: `completed`" in items
+    assert "Review required for `clean_data`" in items
+    assert "Last tool: `clean_data` · `ok`" in items
+    assert "Active data: `data_v123`" in items

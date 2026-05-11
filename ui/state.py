@@ -20,6 +20,9 @@ def ensure_session_state() -> None:
     if "messages" not in st.session_state:
         st.session_state["messages"] = []
 
+    if "streamed_assistant_contents" not in st.session_state:
+        st.session_state["streamed_assistant_contents"] = set()
+
 
 def current_snapshot() -> Dict[str, Any]:
     return st.session_state.get("snapshot") or {}

@@ -68,7 +68,7 @@ def test_action_codec_handles_none():
     assert action_from_state(None) is None
 
 
-def test_action_to_state_dict_serializes_canonical_task_contract():
+def test_action_to_state_dict_drops_canonical_task_contract_from_current_action_payload():
     action = ActionProposal(
         action_id="act_4",
         action_type="tool_call",
@@ -95,16 +95,9 @@ def test_action_to_state_dict_serializes_canonical_task_contract():
 
     payload = action_to_state_dict(action)
 
-    assert payload["task_contract"]["contract_id"] == "contract_01"
-    assert payload["task_contract"]["required_deliverables"][0] == {
-        "deliverable_id": "regression_model",
-        "description": "Fit OLS regression.",
-        "satisfied_by": ["run_multiple_regression"],
-        "required_evidence": ["status_ok", "coef_table"],
-        "status": "pending",
-    }
-
-    json.dumps(payload)
+    assert payload["action_id"] == "act_4"
+    assert payload["tool_name"] == "run_multiple_regression"
+    assert "task_contract" not in payload
 
 
 def test_action_from_state_rehydrates_canonical_task_contract():
@@ -151,3 +144,22 @@ def test_action_from_state_rejects_legacy_task_contract_inside_action_payload():
                 "required_deliverables": ["brief summary"],
             },
         })
+
+def test_action_to_state_dict_drops_task_contract_from_current_action_payload():
+    action = {
+        "action_id": "act_final",
+        "action_type": "final_answer",
+        "tool_name": None,
+        "arguments": {},
+        "reasoning_summary": "Prepare final answer.",
+        "task_contract": {
+            "required_tools": ["get_summary_stats"],
+            "required_deliverables": ["brief summary"],
+        },
+    }
+
+    payload = action_to_state_dict(action)
+
+    assert payload["action_id"] == "act_final"
+    assert payload["action_type"] == "final_answer"
+    assert "task_contract" not in payload

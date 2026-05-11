@@ -26,6 +26,7 @@ PlanStatus = Literal[
     "blocked",
     "executing",
     "partially_executed",
+    "awaiting_review",
     "completed",
     "partially_failed",
     "cancelled",

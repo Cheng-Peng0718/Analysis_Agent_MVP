@@ -148,3 +148,42 @@ def test_human_review_rejection_observation_does_not_count_as_execution():
             "strategy": "rows",
         },
     )
+
+def test_duplicate_execution_is_scoped_to_active_data_version():
+    state = {
+        "active_data_version_id": "data_v2",
+        "analysis_runs": [
+            {
+                "tool_name": "inspect_dataset",
+                "arguments": {},
+                "data_version_id": "raw_v1",
+            }
+        ],
+        "observations": [],
+    }
+
+    assert not has_duplicate_executed_action(
+        state=state,
+        tool_name="inspect_dataset",
+        arguments={},
+    )
+
+
+def test_duplicate_execution_blocks_same_active_data_version():
+    state = {
+        "active_data_version_id": "data_v2",
+        "analysis_runs": [
+            {
+                "tool_name": "inspect_dataset",
+                "arguments": {},
+                "data_version_id": "data_v2",
+            }
+        ],
+        "observations": [],
+    }
+
+    assert has_duplicate_executed_action(
+        state=state,
+        tool_name="inspect_dataset",
+        arguments={},
+    )

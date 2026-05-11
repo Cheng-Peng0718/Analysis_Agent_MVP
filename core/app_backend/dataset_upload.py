@@ -106,7 +106,7 @@ def initialize_dataset_session_from_file(
         "current_step": 0,
         "max_steps": max_steps,
 
-        "dataset_profile": state_dataset_profile,
+        "dataset_profile": state_dataset_profile.model_dump(),
         "data_versions": [raw_version],
         "active_data_version_id": active_data_version_id,
         "data_audit_log": [audit_event],
@@ -130,6 +130,8 @@ def initialize_dataset_session_from_file(
         "plan_status": None,
         "plan_execution_status": None,
         "current_plan_step_id": None,
+        "action_origin": None,
+        "pending_plan_clarification": None,
 
         "final_answer": None,
         "assistant_response": {

@@ -5,6 +5,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 import streamlit as st
+import time
+
+def stream_text_chunks(text: str):
+    for token in text.split(" "):
+        yield token + " "
+        time.sleep(0.015)
 
 from core.app_backend import (
     approve_pending_review,
@@ -18,7 +24,8 @@ from ui.renderers import (
     render_key_value_captions,
     rows_from_column_profile,
     render_analysis_run,
-    render_data_version_timeline,
+    render_compact_data_version_timeline,
+    render_agent_activity,
 )
 from ui.state import (
     add_message,
@@ -26,6 +33,14 @@ from ui.state import (
     sync_assistant_response_to_chat,
 )
 from ui.styles import panel_header, status_pill
+from ui.layout import (
+    ANALYSIS_PANEL_HEIGHT,
+    CHAT_HISTORY_HEIGHT,
+    DATA_VERSION_PANEL_HEIGHT,
+    PLAN_PANEL_HEIGHT,
+    REVIEW_PANEL_HEIGHT,
+    COLUMN_PROFILE_HEIGHT,
+)
 
 
 def render_upload_panel() -> None:
@@ -57,7 +72,7 @@ def render_upload_panel() -> None:
         st.session_state["graph_state"] = result["state"]
         st.session_state["snapshot"] = result["snapshot"]
         st.session_state["messages"] = []
-
+        st.session_state["streamed_assistant_contents"] = set()
         sync_assistant_response_to_chat(result["snapshot"])
 
         st.rerun()
@@ -72,8 +87,10 @@ def render_dataset_panel(snapshot: Dict[str, Any]) -> None:
         st.info("No dataset loaded.")
         return
 
-    st.markdown(f"**{dataset.get('dataset_name')}**")
+    dataset_name = dataset.get("dataset_name")
     active_version_id = dataset.get("active_data_version_id")
+
+    st.markdown(f"**{dataset_name}**")
     status_pill(f"Active: {active_version_id}", kind="ok")
     st.write("")
 
@@ -85,87 +102,88 @@ def render_dataset_panel(snapshot: Dict[str, Any]) -> None:
     metric_cols[0].metric("Rows", summary.get("n_rows", "—"))
     metric_cols[1].metric("Columns", summary.get("n_cols", len(columns) or "—"))
 
-    with st.expander("Column profile", expanded=True):
-        if not columns:
-            st.caption("No column profile available.")
-            return
+    if not columns:
+        st.caption("No column profile available.")
+        return
 
+    with st.expander("Column profile", expanded=True):
         st.dataframe(
             rows_from_column_profile(columns),
             width="stretch",
+            height=COLUMN_PROFILE_HEIGHT,
             hide_index=True,
         )
-
 
 def render_data_versions(snapshot: Dict[str, Any]) -> None:
     dataset = snapshot.get("dataset") or {}
     versions = dataset.get("data_versions") or []
     active_version_id = dataset.get("active_data_version_id")
 
-    panel_header("Data Versions", "Track mutations and lineage.")
+    panel_header("Data Versions", "Dataset lineage.")
 
-    render_data_version_timeline(
-        versions,
-        active_version_id=active_version_id,
-    )
-
+    with st.container(height=DATA_VERSION_PANEL_HEIGHT, border=True):
+        render_compact_data_version_timeline(
+            versions,
+            active_version_id=active_version_id,
+        )
 
 def render_plan_panel(snapshot: Dict[str, Any]) -> None:
     panel_header("Plan", "Review planned analysis steps.")
 
-    plan = snapshot.get("plan") or {}
-    pending_plan = plan.get("pending_plan")
+    with st.container(height=PLAN_PANEL_HEIGHT, border=True):
+        plan = snapshot.get("plan") or {}
+        pending_plan = plan.get("pending_plan")
 
-    if not pending_plan:
-        st.info("No pending plan.")
-        return
+        if not pending_plan:
+            st.info("No pending plan.")
+            return
 
-    render_key_value_captions([
-        ("Plan ID", plan.get("plan_id")),
-        ("Plan status", plan.get("plan_status")),
-        ("Execution status", plan.get("plan_execution_status")),
-    ])
+        render_key_value_captions([
+            ("Plan ID", plan.get("plan_id")),
+            ("Plan status", plan.get("plan_status")),
+            ("Execution status", plan.get("plan_execution_status")),
+        ])
 
-    steps = pending_plan.get("steps") or []
+        steps = pending_plan.get("steps") or []
 
-    for step in steps:
-        title = step.get("title") or step.get("tool_name") or step.get("step_id")
-        status = step.get("status")
-        ready = step.get("execution_ready")
+        for step in steps:
+            title = step.get("title") or step.get("tool_name") or step.get("step_id")
+            status = step.get("status")
+            ready = step.get("execution_ready")
 
-        with st.expander(f"{title} · {status}", expanded=False):
-            st.write(step.get("purpose") or step.get("rationale") or "")
-            st.json({
-                "step_id": step.get("step_id"),
-                "tool_name": step.get("tool_name"),
-                "status": status,
-                "execution_ready": ready,
-                "arguments": step.get("arguments"),
-                "required_user_choices": step.get("required_user_choices"),
-                "warnings": step.get("warnings"),
-            })
+            with st.expander(f"{title} · {status}", expanded=False):
+                st.write(step.get("purpose") or step.get("rationale") or "")
+                st.json({
+                    "step_id": step.get("step_id"),
+                    "tool_name": step.get("tool_name"),
+                    "status": status,
+                    "execution_ready": ready,
+                    "arguments": step.get("arguments"),
+                    "required_user_choices": step.get("required_user_choices"),
+                    "warnings": step.get("warnings"),
+                })
 
-    st.divider()
+        st.divider()
 
-    if st.button("Run confirmed plan", type="primary", width="stretch"):
-        session = st.session_state["app_session"]
+        if st.button("Run confirmed plan", type="primary", width="stretch"):
+            session = st.session_state["app_session"]
 
-        result = run_pending_plan_until_pause(
-            st.session_state["graph_state"],
-            config=session.graph_config,
-        )
+            result = run_pending_plan_until_pause(
+                st.session_state["graph_state"],
+                config=session.graph_config,
+            )
 
-        st.session_state["graph_state"] = result["state"]
-        st.session_state["snapshot"] = result["snapshot"]
+            st.session_state["graph_state"] = result["state"]
+            st.session_state["snapshot"] = result["snapshot"]
 
-        plan_run = result.get("plan_run") or {}
-        add_message(
-            "assistant",
-            f"Plan run `{plan_run.get('status')}`: {plan_run.get('reason')}",
-        )
-        sync_assistant_response_to_chat(result["snapshot"])
+            plan_run = result.get("plan_run") or {}
+            add_message(
+                "assistant",
+                f"Plan run `{plan_run.get('status')}`: {plan_run.get('reason')}",
+            )
+            sync_assistant_response_to_chat(result["snapshot"])
 
-        st.rerun()
+            st.rerun()
 
 
 def render_analysis_panel(snapshot: Dict[str, Any]) -> None:
@@ -175,114 +193,121 @@ def render_analysis_panel(snapshot: Dict[str, Any]) -> None:
     runs = analysis.get("analysis_runs") or []
     observations = analysis.get("observations") or []
 
-    if not runs and not observations:
-        st.info("No analysis results yet.")
-        return
+    with st.container(height=ANALYSIS_PANEL_HEIGHT, border=True):
+        if not runs and not observations:
+            st.info("No analysis results yet.")
+            return
 
-    for run in runs:
-        render_analysis_run(run)
+        for run in runs:
+            render_analysis_run(run)
 
-    if observations:
-        render_json_expander("Observation history", observations, expanded=False)
-
+        if observations:
+            render_json_expander("Observation history", observations, expanded=False)
 
 def render_review_panel(snapshot: Dict[str, Any]) -> None:
     panel_header("Review", "Approve or reject high-risk actions.")
 
     review = snapshot.get("review") or {}
 
-    if not review.get("human_review_required"):
-        status_pill("No approval required", kind="neutral")
-        return
+    with st.container(height=REVIEW_PANEL_HEIGHT, border=True):
+        if not review.get("human_review_required"):
+            status_pill("No approval required", kind="neutral")
+            return
 
-    status_pill("Approval required", kind="danger")
-    st.write("")
+        status_pill("Approval required", kind="danger")
+        st.write("")
 
-    st.warning("This action requires approval before execution.")
+        pending_action = review.get("pending_action") or {}
+        verification = review.get("current_verification") or {}
 
-    pending_action = review.get("pending_action") or {}
-    verification = review.get("current_verification") or {}
+        tool_name = (
+            pending_action.get("tool_name")
+            or verification.get("details", {}).get("tool_name")
+            or "unknown_tool"
+        )
 
-    tool_name = (
-        pending_action.get("tool_name")
-        or verification.get("details", {}).get("tool_name")
-        or "unknown_tool"
-    )
+        st.caption(f"Pending tool: `{tool_name}`")
 
-    st.markdown(f"**Pending tool:** `{tool_name}`")
+        approve_col, reject_col = st.columns(2)
 
-    feedback = review.get("feedback") or verification.get("feedback")
-    if feedback:
-        st.caption(feedback)
+        with approve_col:
+            if st.button(
+                "Approve",
+                type="primary",
+                width="stretch",
+                key="approve_pending_review",
+            ):
+                session = st.session_state["app_session"]
 
-    with st.expander("Pending action", expanded=True):
-        st.json(pending_action)
+                result = approve_pending_review(
+                    st.session_state["graph_state"],
+                    config=session.graph_config,
+                )
 
-    with st.expander("Verification details", expanded=False):
-        st.json(verification)
+                st.session_state["graph_state"] = result["state"]
+                st.session_state["snapshot"] = result["snapshot"]
 
-    rejection_reason = st.text_area(
-        "Rejection reason",
-        placeholder="Optional: explain why this action should not run.",
-        key="human_review_rejection_reason_input",
-    )
+                add_message("assistant", "Approved. Continuing execution.")
+                sync_assistant_response_to_chat(result["snapshot"])
 
-    approve_col, reject_col = st.columns(2)
+                st.rerun()
 
-    with approve_col:
-        if st.button(
-            "Approve and run",
-            type="primary",
-            width="stretch",
-            key="approve_pending_review",
-        ):
-            session = st.session_state["app_session"]
+        with reject_col:
+            if st.button(
+                "Reject",
+                type="secondary",
+                width="stretch",
+                key="reject_pending_review",
+            ):
+                session = st.session_state["app_session"]
+                rejection_reason = st.session_state.get(
+                    "human_review_rejection_reason_input",
+                    "",
+                )
 
-            result = approve_pending_review(
-                st.session_state["graph_state"],
-                config=session.graph_config,
-            )
+                result = reject_pending_review(
+                    st.session_state["graph_state"],
+                    rejection_reason=rejection_reason.strip() or None,
+                    config=session.graph_config,
+                )
 
-            st.session_state["graph_state"] = result["state"]
-            st.session_state["snapshot"] = result["snapshot"]
+                st.session_state["graph_state"] = result["state"]
+                st.session_state["snapshot"] = result["snapshot"]
 
-            add_message("assistant", "Approved. Continuing execution.")
-            sync_assistant_response_to_chat(result["snapshot"])
+                add_message("assistant", "Rejected the pending action.")
+                sync_assistant_response_to_chat(result["snapshot"])
 
-            st.rerun()
+                st.rerun()
 
-    with reject_col:
-        if st.button(
-            "Reject",
-            type="secondary",
-            width="stretch",
-            key="reject_pending_review",
-        ):
-            session = st.session_state["app_session"]
-
-            result = reject_pending_review(
-                st.session_state["graph_state"],
-                rejection_reason=rejection_reason.strip() or None,
-                config=session.graph_config,
-            )
-
-            st.session_state["graph_state"] = result["state"]
-            st.session_state["snapshot"] = result["snapshot"]
-
-            add_message("assistant", "Rejected the pending action.")
-            sync_assistant_response_to_chat(result["snapshot"])
-
-            st.rerun()
-
+        with st.expander("Details", expanded=False):
+            st.json({
+                "pending_action": pending_action,
+                "verification": verification,
+            })
 
 def render_chat(snapshot: Dict[str, Any]) -> None:
     panel_header("Chat", "Ask questions or request analysis plans.")
 
     sync_assistant_response_to_chat(snapshot)
 
-    for message in st.session_state["messages"]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    with st.container(height=CHAT_HISTORY_HEIGHT, border=True):
+        for idx, message in enumerate(st.session_state["messages"]):
+            with st.chat_message(message["role"]):
+                content = message["content"]
+
+                should_stream = (
+                        message["role"] == "assistant"
+                        and idx == len(st.session_state["messages"]) - 1
+                        and content not in st.session_state["streamed_assistant_contents"]
+                )
+
+                if should_stream:
+                    st.write_stream(stream_text_chunks(content))
+                    st.session_state["streamed_assistant_contents"].add(content)
+                else:
+                    st.markdown(content)
+
+    render_agent_activity(snapshot)
 
     if not has_dataset(snapshot):
         st.chat_input("Upload a dataset first.", disabled=True)
@@ -300,6 +325,19 @@ def render_chat(snapshot: Dict[str, Any]) -> None:
             user_message,
             config=session.graph_config,
         )
+
+        next_state = result["state"]
+
+        route_intent = (
+                (next_state.get("intent_decision") or {}).get("route_intent")
+                or next_state.get("interaction_intent")
+        )
+
+        if route_intent == "execute_plan":
+            result = run_pending_plan_until_pause(
+                next_state,
+                config=session.graph_config,
+            )
 
         st.session_state["graph_state"] = result["state"]
         st.session_state["snapshot"] = result["snapshot"]

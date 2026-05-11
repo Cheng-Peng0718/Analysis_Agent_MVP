@@ -122,9 +122,11 @@ def test_renderers_own_data_version_timeline_rendering():
     text = Path("ui/renderers.py").read_text(encoding="utf-8")
     panels_text = Path("ui/panels.py").read_text(encoding="utf-8")
 
-    assert "def render_data_version_timeline" in text
+    assert "def render_compact_data_version_timeline" in text
+    assert "def compact_version_node" in text
     assert "def data_version_rows" in text
-    assert "render_data_version_timeline" in panels_text
+
+    assert "render_compact_data_version_timeline" in panels_text
 
 def test_ui_styles_are_isolated_from_backend_logic():
     text = Path("ui/styles.py").read_text(encoding="utf-8")
@@ -149,3 +151,11 @@ def test_app_injects_ui_styles():
 
     assert "inject_app_styles" in text
     assert "app-header" in text
+
+def test_agent_activity_rendering_stays_in_ui_renderer_layer():
+    text = Path("ui/renderers.py").read_text(encoding="utf-8")
+    panels_text = Path("ui/panels.py").read_text(encoding="utf-8")
+
+    assert "def render_agent_activity" in text
+    assert "def build_agent_activity_items" in text
+    assert "render_agent_activity" in panels_text

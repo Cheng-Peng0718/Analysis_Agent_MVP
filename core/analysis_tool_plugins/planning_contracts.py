@@ -17,5 +17,12 @@ class PlanningMetadata:
 
     not_recommended_for_goal_types: List[str] = field(default_factory=list)
 
+    # Generic cross-step dependency contract. If a plugin declares
+    # wait_for_step_tags=["data_cleaning"], the plan scheduler may reorder and
+    # pause that step until any pending step carrying planning_tags containing
+    # "data_cleaning" has completed. This avoids global tool-name checks such
+    # as "clean_data before regression".
+    wait_for_step_tags: List[str] = field(default_factory=list)
+
     # None means "not specified locally"; ToolManifest normalizes it to 100.
     plan_order: Optional[int] = None

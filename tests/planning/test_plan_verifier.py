@@ -136,3 +136,38 @@ def test_verify_plan_moves_not_applicable_steps_to_blocked_list():
     assert len(verified_plan.steps) == 0
     assert len(verified_plan.blocked_or_not_recommended) == 1
     assert verified_plan.blocked_or_not_recommended[0].status == "not_applicable"
+
+    def test_clean_data_ready_even_with_confirmation_warnings(make_profile):
+        from core.planning.schemas import PlanStep
+        from core.planning.verifier import verify_plan_step
+
+        step = PlanStep(
+            step_id="s_clean",
+            title="Clean data",
+            tool_name="clean_data",
+            arguments={
+                "action_type": "drop",
+                "strategy": "rows",
+                "columns": ["GPA", "SATM"],
+            },
+            variables={
+                "action_type": "drop",
+                "strategy": "rows",
+                "columns": ["GPA", "SATM"],
+            },
+            status="needs_user_choice",
+            execution_ready=False,
+            required_user_choices=["action_type", "strategy"],
+            warnings=[
+                "This operation will mutate the dataset by dropping rows.",
+                "User confirmation is required before execution.",
+            ],
+        )
+
+        verified = verify_plan_step(step, make_profile())
+
+        assert verified.status == "ready"
+        assert verified.execution_ready is True
+        assert verified.required_user_choices == []
+        assert "action_type" in verified.arguments
+        assert "strategy" in verified.arguments

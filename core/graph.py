@@ -65,6 +65,7 @@ workflow.add_conditional_edges(
         "plan_only": "plan_only",
         "execute_pending_plan": "execute_pending_plan",
         "supervisor": "supervisor",
+        "end": END,
     },
 )
 
@@ -77,6 +78,7 @@ workflow.add_conditional_edges(
     _route_after_execute_pending_plan,
     {
         "verify": "verify",
+        "human_review": "human_review",
         "end": END,
     },
 )

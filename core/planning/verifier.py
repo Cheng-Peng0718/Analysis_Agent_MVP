@@ -1,24 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, List
 
 from core.analysis_tool_plugins import get_plugin
 from core.analysis_tool_plugins.applicability import ApplicabilityResult
 from core.dataset_intelligence.schemas import DatasetProfileV2
 from core.planning.schemas import PlanProposal, PlanStep
 from core.planning.dependencies import reorder_clean_data_before_modeling
-
-NO_ROLE_READY_TOOLS = {
-    "get_summary_stats",
-    "missingness_report",
-    "get_correlation_matrix",
-}
-
-AUTO_READY_TOOLS = {
-    "get_summary_stats",
-    "missingness_report",
-    "get_correlation_matrix",
-}
 
 def _as_list(value: Any) -> List[Any]:
     if value is None:
@@ -64,70 +52,74 @@ def _is_missing_choice(value) -> bool:
 
     return False
 
+def _unique_strings(values: List[Any]) -> List[str]:
+    result: List[str] = []
 
-def _verify_clean_data_choices(step: PlanStep, profile: DatasetProfileV2) -> PlanStep:
+    for value in values or []:
+        if not isinstance(value, str):
+            continue
+
+        if value and value not in result:
+            result.append(value)
+
+    return result
+
+
+def _get_policy_required_choices(plugin) -> List[str]:
+    planning_policy = getattr(plugin, "planning_policy", None)
+
+    if planning_policy is None:
+        return []
+
+    return list(getattr(planning_policy, "required_user_choices", []) or [])
+
+
+def _policy_allows_ready_without_variables(plugin) -> bool:
+    planning_policy = getattr(plugin, "planning_policy", None)
+
+    if planning_policy is None:
+        return False
+
+    return bool(getattr(planning_policy, "ready_without_user_variables", False))
+
+
+def _normalize_contract_value_between_variables_and_arguments(
+    step: PlanStep,
+    key: str,
+) -> Any:
     """
-    clean_data is special because it mutates data and needs explicit choices
-    before it can even reach the human-review gate.
-
-    Required choices:
-    - action_type
-    - strategy
-    - columns
+    Keep step.variables and step.arguments synchronized for declared contract
+    fields. The LLM is allowed to put a selected variable in either place; the
+    verifier owns canonical normalization before readiness/execution.
     """
-    required = ["action_type", "strategy", "columns"]
-
-    missing = []
-
-    for key in required:
-        value = _first_non_empty_mapping_value(step, key)
-
-        if _is_missing_choice(value):
-            missing.append(key)
-
-    if missing:
-        step.status = "needs_user_choice"
-        step.execution_ready = False
-        step.required_user_choices = missing
-        return step
-
-    columns = _first_non_empty_mapping_value(step, "columns")
-
-    if isinstance(columns, str):
-        columns = [columns]
-
-    for col_name in columns:
-        if not isinstance(col_name, str):
-            step.status = "blocked"
-            step.execution_ready = False
-            step.warnings.append(
-                "clean_data columns must be string column names."
-            )
-            return step
-
-        if not _column_exists(profile, col_name):
-            step.status = "blocked"
-            step.execution_ready = False
-            step.warnings.append(
-                f"Column '{col_name}' does not exist in the current dataset."
-            )
-            return step
-
-    # Normalize choices into both variables and arguments so downstream graph,
-    # verifier, and plugin execution all see the same contract.
     step.variables = dict(step.variables or {})
     step.arguments = dict(step.arguments or {})
 
-    for key in required:
-        value = _first_non_empty_mapping_value(step, key)
+    value = _first_non_empty_mapping_value(step, key)
+
+    if not _is_missing_choice(value):
         step.variables[key] = value
         step.arguments[key] = value
 
-    step.status = "ready"
-    step.execution_ready = True
-    step.required_user_choices = []
+    return value
 
-    return step
+def _is_contract_readiness_warning(warning: Any) -> bool:
+    """Return True for stale verifier/readiness warnings from earlier passes.
+
+    Plan steps may enter verification with warnings created by the planner or by
+    an earlier verifier implementation. Verification is authoritative for
+    execution readiness, so these stale readiness warnings must be recomputed
+    instead of blocking otherwise-valid contract-driven plugins.
+    """
+    if not isinstance(warning, str):
+        return False
+
+    lowered = warning.lower()
+    return (
+        "variable role contract" in lowered
+        or "execution-ready from planning" in lowered
+    )
+
 
 def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) -> PlanStep:
     """
@@ -137,30 +129,40 @@ def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) ->
     It only checks the plugin's declared VariableRoleSpec contract.
     """
 
-    if step.tool_name == "clean_data":
-        return _verify_clean_data_choices(step, profile)
-
     role_specs = getattr(plugin, "variable_roles", []) or []
-    planning_policy = getattr(plugin, "planning_policy", None)
-    ready_without_user_variables = bool(
-        getattr(planning_policy, "ready_without_user_variables", False)
-    )
+    ready_without_user_variables = _policy_allows_ready_without_variables(plugin)
+    policy_required_choices = _get_policy_required_choices(plugin)
 
-    if step.tool_name in AUTO_READY_TOOLS:
-        step.required_user_choices = [
-            choice
-            for choice in (step.required_user_choices or [])
-            if choice != "analysis variables"
-        ]
+    step.variables = dict(step.variables or {})
+    step.arguments = dict(step.arguments or {})
 
-        step.warnings = [
-            warning
-            for warning in (step.warnings or [])
-            if "Plugin has no variable role contract" not in warning
-        ]
+    # Recompute verifier-owned readiness fields from the current plugin
+    # contract. Do not let stale generic choices/warnings from a previous
+    # planning or verification pass keep a default-ready tool blocked.
+    step.required_user_choices = [
+        choice
+        for choice in _unique_strings(step.required_user_choices or [])
+        if choice != "analysis variables"
+    ]
+    step.warnings = [
+        warning
+        for warning in list(step.warnings or [])
+        if not _is_contract_readiness_warning(warning)
+    ]
+
+    unresolved_choices: List[str] = []
+
+    for choice in policy_required_choices:
+        value = _normalize_contract_value_between_variables_and_arguments(
+            step,
+            choice,
+        )
+
+        if _is_missing_choice(value):
+            unresolved_choices.append(choice)
 
     if not role_specs:
-        if ready_without_user_variables:
+        if ready_without_user_variables and not unresolved_choices:
             step.status = "ready"
             step.execution_ready = True
             step.required_user_choices = []
@@ -169,38 +171,18 @@ def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) ->
 
             return step
 
-        if (
-                step.tool_name in NO_ROLE_READY_TOOLS
-                and step.status not in {"blocked", "not_applicable"}
-        ):
-            step.status = "ready"
-            step.execution_ready = True
+        step.status = "needs_user_choice"
+        step.execution_ready = False
 
-            step.required_user_choices = [
-                choice
-                for choice in (step.required_user_choices or [])
-                if choice != "analysis variables"
-            ]
+        choices = unresolved_choices or ["analysis variables"]
+        step.required_user_choices = _unique_strings(
+            list(step.required_user_choices or []) + choices
+        )
 
-            step.warnings = [
-                warning
-                for warning in (step.warnings or [])
-                if "Plugin has no variable role contract" not in warning
-            ]
-
-            step.arguments = step.arguments or {}
-
-            return step
-
-        if step.status == "ready":
-            step.status = "needs_user_choice"
-            step.execution_ready = False
-
-            if "analysis variables" not in step.required_user_choices:
-                step.required_user_choices.append("analysis variables")
-
+        if not ready_without_user_variables:
             step.warnings.append(
-                "Plugin has no variable role contract; cannot mark step execution-ready from planning."
+                "Plugin has no variable role contract and its planning_policy "
+                "does not allow execution without user choices."
             )
 
         return step
@@ -208,7 +190,11 @@ def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) ->
     all_roles_ready = True
 
     for role in role_specs:
-        selected = _as_list(step.variables.get(role.role_name))
+        raw_selected = _normalize_contract_value_between_variables_and_arguments(
+            step,
+            role.role_name,
+        )
+        selected = _as_list(raw_selected)
 
         if role.required and not selected:
             all_roles_ready = False
@@ -265,7 +251,23 @@ def _verify_variable_roles(step: PlanStep, profile: DatasetProfileV2, plugin) ->
                 )
                 return step
 
-    if all_roles_ready and not step.warnings:
+    if all_roles_ready:
+        remaining_choices = [
+            choice
+            for choice in unresolved_choices
+            if _is_missing_choice(
+                _first_non_empty_mapping_value(step, choice)
+            )
+        ]
+
+        if remaining_choices:
+            step.status = "needs_user_choice"
+            step.execution_ready = False
+            step.required_user_choices = _unique_strings(
+                list(step.required_user_choices or []) + remaining_choices
+            )
+            return step
+
         step.status = "ready"
         step.execution_ready = True
         step.required_user_choices = []
