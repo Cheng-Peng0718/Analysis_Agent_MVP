@@ -7,7 +7,9 @@ from typing import Any, Dict
 import streamlit as st
 
 from core.app_backend import (
+    approve_pending_review,
     initialize_dataset_session_from_file,
+    reject_pending_review,
     run_pending_plan_until_pause,
     run_user_turn,
 )
@@ -16,6 +18,7 @@ from ui.renderers import (
     render_key_value_captions,
     rows_from_column_profile,
     render_analysis_run,
+    render_data_version_timeline,
 )
 from ui.state import (
     add_message,
@@ -69,7 +72,8 @@ def render_dataset_panel(snapshot: Dict[str, Any]) -> None:
         return
 
     st.markdown(f"**{dataset.get('dataset_name')}**")
-    st.caption(f"Active data version: `{dataset.get('active_data_version_id')}`")
+    active_version_id = dataset.get("active_data_version_id")
+    st.success(f"Active data version: `{active_version_id}`")
 
     summary = dataset.get("summary") or {}
     profile = dataset.get("profile") or {}
@@ -94,16 +98,14 @@ def render_dataset_panel(snapshot: Dict[str, Any]) -> None:
 def render_data_versions(snapshot: Dict[str, Any]) -> None:
     dataset = snapshot.get("dataset") or {}
     versions = dataset.get("data_versions") or []
+    active_version_id = dataset.get("active_data_version_id")
 
     st.subheader("Data Versions")
 
-    if not versions:
-        st.info("No data versions yet.")
-        return
-
-    for version in versions:
-        label = version.get("version_id") or "unknown_version"
-        render_json_expander(label, version, expanded=False)
+    render_data_version_timeline(
+        versions,
+        active_version_id=active_version_id,
+    )
 
 
 def render_plan_panel(snapshot: Dict[str, Any]) -> None:
@@ -192,9 +194,80 @@ def render_review_panel(snapshot: Dict[str, Any]) -> None:
         return
 
     st.warning("This action requires approval before execution.")
-    st.json(review.get("current_verification") or {})
 
-    st.caption("Approve / reject wiring will be added in the next UI phase.")
+    pending_action = review.get("pending_action") or {}
+    verification = review.get("current_verification") or {}
+
+    tool_name = (
+        pending_action.get("tool_name")
+        or verification.get("details", {}).get("tool_name")
+        or "unknown_tool"
+    )
+
+    st.markdown(f"**Pending tool:** `{tool_name}`")
+
+    feedback = review.get("feedback") or verification.get("feedback")
+    if feedback:
+        st.caption(feedback)
+
+    with st.expander("Pending action", expanded=True):
+        st.json(pending_action)
+
+    with st.expander("Verification details", expanded=False):
+        st.json(verification)
+
+    rejection_reason = st.text_area(
+        "Rejection reason",
+        placeholder="Optional: explain why this action should not run.",
+        key="human_review_rejection_reason_input",
+    )
+
+    approve_col, reject_col = st.columns(2)
+
+    with approve_col:
+        if st.button(
+            "Approve and run",
+            type="primary",
+            width="stretch",
+            key="approve_pending_review",
+        ):
+            session = st.session_state["app_session"]
+
+            result = approve_pending_review(
+                st.session_state["graph_state"],
+                config=session.graph_config,
+            )
+
+            st.session_state["graph_state"] = result["state"]
+            st.session_state["snapshot"] = result["snapshot"]
+
+            add_message("assistant", "Approved. Continuing execution.")
+            sync_assistant_response_to_chat(result["snapshot"])
+
+            st.rerun()
+
+    with reject_col:
+        if st.button(
+            "Reject",
+            type="secondary",
+            width="stretch",
+            key="reject_pending_review",
+        ):
+            session = st.session_state["app_session"]
+
+            result = reject_pending_review(
+                st.session_state["graph_state"],
+                rejection_reason=rejection_reason.strip() or None,
+                config=session.graph_config,
+            )
+
+            st.session_state["graph_state"] = result["state"]
+            st.session_state["snapshot"] = result["snapshot"]
+
+            add_message("assistant", "Rejected the pending action.")
+            sync_assistant_response_to_chat(result["snapshot"])
+
+            st.rerun()
 
 
 def render_chat(snapshot: Dict[str, Any]) -> None:

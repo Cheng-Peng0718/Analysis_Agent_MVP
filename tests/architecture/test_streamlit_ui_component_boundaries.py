@@ -57,6 +57,8 @@ def test_ui_panels_use_app_backend_public_api_only():
         "initialize_dataset_session_from_file",
         "run_user_turn",
         "run_pending_plan_until_pause",
+        "approve_pending_review",
+        "reject_pending_review",
     ]
 
     for phrase in expected:
@@ -98,3 +100,28 @@ def test_renderers_own_analysis_result_rendering():
         assert phrase in text
 
     assert "render_analysis_run" in panels_text
+
+def test_review_panel_uses_backend_review_contract_not_state_patching():
+    text = Path("ui/panels.py").read_text(encoding="utf-8")
+
+    assert "approve_pending_review" in text
+    assert "reject_pending_review" in text
+
+    forbidden = [
+        '["human_review_decision"]',
+        '["human_review_action_hash"]',
+        '["current_verification"]',
+        '["pending_action"]',
+        "human_review_node",
+    ]
+
+    for phrase in forbidden:
+        assert phrase not in text
+
+def test_renderers_own_data_version_timeline_rendering():
+    text = Path("ui/renderers.py").read_text(encoding="utf-8")
+    panels_text = Path("ui/panels.py").read_text(encoding="utf-8")
+
+    assert "def render_data_version_timeline" in text
+    assert "def data_version_rows" in text
+    assert "render_data_version_timeline" in panels_text

@@ -256,3 +256,76 @@ def render_analysis_run(run: Dict[str, Any]) -> None:
         if run.get("artifacts"):
             st.markdown("**Artifacts**")
             render_artifact_payload(run["artifacts"])
+
+def version_label(version: Dict[str, Any]) -> str:
+    version_id = version.get("version_id") or "unknown_version"
+    created_by = version.get("created_by") or version.get("tool_name") or "unknown"
+
+    return f"{version_id} · {created_by}"
+
+
+def data_version_rows(versions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows = []
+
+    for version in versions:
+        rows.append({
+            "version_id": version.get("version_id"),
+            "parent_version_id": version.get("parent_version_id"),
+            "created_by": version.get("created_by"),
+            "tool_name": version.get("tool_name"),
+            "n_rows": version.get("n_rows"),
+            "n_cols": version.get("n_cols"),
+            "description": version.get("description"),
+            "path": version.get("path"),
+        })
+
+    return rows
+
+
+def render_data_version_timeline(
+    versions: List[Dict[str, Any]],
+    *,
+    active_version_id: str | None = None,
+) -> None:
+    if not versions:
+        st.info("No data versions yet.")
+        return
+
+    st.dataframe(
+        pd.DataFrame(data_version_rows(versions)),
+        width="stretch",
+        hide_index=True,
+    )
+
+    st.markdown("**Timeline**")
+
+    for index, version in enumerate(versions):
+        version_id = version.get("version_id") or "unknown_version"
+        is_active = version_id == active_version_id
+
+        badge = "🟢 Active" if is_active else "⚪ Version"
+        parent = version.get("parent_version_id")
+        created_by = version.get("created_by") or version.get("tool_name") or "unknown"
+        description = version.get("description") or ""
+
+        with st.container(border=True):
+            st.markdown(f"**{badge}: `{version_id}`**")
+            st.caption(f"Created by: `{created_by}`")
+
+            if parent:
+                st.caption(f"Parent: `{parent}`")
+
+            cols = st.columns(2)
+            cols[0].metric("Rows", version.get("n_rows", "—"))
+            cols[1].metric("Columns", version.get("n_cols", "—"))
+
+            if description:
+                st.write(description)
+
+            path = version.get("path")
+            if path:
+                with st.expander("Stored path", expanded=False):
+                    st.code(str(path))
+
+        if index < len(versions) - 1:
+            st.markdown("↓")

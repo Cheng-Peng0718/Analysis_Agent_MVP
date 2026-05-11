@@ -1,8 +1,10 @@
 from ui.renderers import (
     block_title,
     block_type,
+    data_version_rows,
     metric_rows_from_payload,
     table_rows_from_payload,
+    version_label,
 )
 
 
@@ -65,3 +67,40 @@ def test_metric_rows_from_payload():
 
     assert {"metric": "r_squared", "value": 0.72} in rows
     assert {"metric": "RMSE", "value": 1.5} in rows
+
+def test_version_label_uses_version_id_and_creator():
+    label = version_label({
+        "version_id": "data_v0002",
+        "created_by": "clean_data",
+    })
+
+    assert label == "data_v0002 · clean_data"
+
+
+def test_data_version_rows_normalizes_versions_for_display():
+    rows = data_version_rows([
+        {
+            "version_id": "raw_v1",
+            "parent_version_id": None,
+            "created_by": "upload",
+            "n_rows": 5,
+            "n_cols": 4,
+            "description": "Initial upload.",
+            "path": "workspace/data_versions/raw_v1.parquet",
+        },
+        {
+            "version_id": "data_v0002",
+            "parent_version_id": "raw_v1",
+            "tool_name": "clean_data",
+            "n_rows": 4,
+            "n_cols": 4,
+            "description": "Dropped rows with missing GPA.",
+            "path": "workspace/data_versions/data_v0002.parquet",
+        },
+    ])
+
+    assert rows[0]["version_id"] == "raw_v1"
+    assert rows[0]["created_by"] == "upload"
+    assert rows[1]["version_id"] == "data_v0002"
+    assert rows[1]["parent_version_id"] == "raw_v1"
+    assert rows[1]["tool_name"] == "clean_data"
