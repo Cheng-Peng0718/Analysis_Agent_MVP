@@ -83,7 +83,7 @@ def generate_profile(file_path: str) -> DatasetProfile:
                 return "numeric"
             if pd.api.types.is_datetime64_any_dtype(s):
                 return "datetime"
-            if pd.api.types.is_categorical_dtype(s):
+            if isinstance(s.dtype, pd.CategoricalDtype):
                 return "categorical"
             if pd.api.types.is_object_dtype(s) or pd.api.types.is_string_dtype(s):
                 non_missing = s.dropna()
