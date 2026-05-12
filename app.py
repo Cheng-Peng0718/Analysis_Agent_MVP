@@ -20,8 +20,11 @@ def typewriter_effect(text, speed=0.015):
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
 
-st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
-st.title("SQL-backed LLM Business Analytics Agent")
+st.set_page_config(page_title="SQL-connected AI Data Analyst", layout="wide")
+st.title("SQL-connected AI Data Analyst")
+st.caption(
+    "From SQL databases and uploaded datasets to EDA, KPI analysis, statistical modeling, visualization, and evidence-based reports."
+)
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"web_{uuid.uuid4().hex[:8]}"
@@ -277,20 +280,24 @@ with st.sidebar:
     else:
         st.divider()
         st.info(
-            "No CSV/DataFrame dataset loaded yet. You can upload a CSV/Excel file, "
-            "or ask the agent to inspect a SQL database path."
+            "No active analysis dataset loaded yet. You can upload a CSV/Excel file, "
+            "or start from a SQL database and let the agent build an analysis-ready dataset."
         )
         st.caption(
-            "Try: `Inspect the SQL schema for demo_data/ecommerce_demo.duckdb`"
+            "Try: `Analyze the ecommerce database in demo_data/ecommerce_demo.duckdb and identify what drives revenue.`"
         )
 
-    state_snapshot = app.get_state(config)
-    plan = state_snapshot.values.get("analysis_plan")
-    if plan:
-        st.divider()
-        st.subheader("Current analysis plan")
-        for i, step in enumerate(plan):
-            st.info(f"{i + 1}. {step}")
+    # Old workflow-style plan display is intentionally disabled.
+    # The active architecture is a workbench-style analyst loop:
+    # context -> supervisor -> verify -> execute -> summarize -> evidence -> answer.
+    #
+    # state_snapshot = app.get_state(config)
+    # plan = state_snapshot.values.get("analysis_plan")
+    # if plan:
+    #     st.divider()
+    #     st.subheader("Current analysis plan")
+    #     for i, step in enumerate(plan):
+    #         st.info(f"{i + 1}. {step}")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -460,7 +467,7 @@ if is_interrupted:
             st.session_state.resume_stream = True
             st.rerun()
 
-elif prompt := st.chat_input("Enter your analysis request..."):
+elif prompt := st.chat_input("Ask for an analysis."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.rerun()
 
