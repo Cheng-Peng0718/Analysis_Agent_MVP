@@ -221,7 +221,12 @@ class AgentContext:
         data_audit_log: list = None,
     ):
         self.workspace_dir = workspace_dir
+
+        # Canonical plugin argument protocol.
+        # Older plugins used context.args; newer plugins should use context.arguments.
+        # Keep both names pointing to the same object during stabilization.
         self.args = arguments or {}
+        self.arguments = self.args
 
         # Backward-compatible fallback path
         self.file_path = os.path.join(self.workspace_dir, "working_data.parquet")
