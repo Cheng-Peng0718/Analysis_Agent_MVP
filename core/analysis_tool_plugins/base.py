@@ -106,11 +106,9 @@ class ArgumentSchema:
     column_list_args: List[str] = field(default_factory=list)
     allow_all_columns: bool = False
 
-    def to_legacy_schema_dict(self) -> Dict[str, Any]:
+    def to_schema_dict(self) -> Dict[str, Any]:
         """
-        Convert unified plugin ArgumentSchema into the legacy schema dictionary shape.
-
-        This keeps the old validator working during migration.
+        Canonical schema dictionary used by analysis_tool_plugins validation.
         """
         return {
             "required": self.required,
@@ -119,6 +117,12 @@ class ArgumentSchema:
             "column_list_args": self.column_list_args,
             "allow_all_columns": self.allow_all_columns,
         }
+
+    def to_legacy_schema_dict(self) -> Dict[str, Any]:
+        """
+        Backward-compatible alias. Do not use in new code.
+        """
+        return self.to_schema_dict()
 
 # ==========================================================
 # Display config

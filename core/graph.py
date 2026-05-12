@@ -296,7 +296,23 @@ def execute_node(state: GraphState):
     action = state.get("current_action")
 
     if not action or not hasattr(action, "tool_name"):
-        return {"current_execution": "Error: No valid action provided."}
+        return {
+            "current_execution": {
+                "execution_id": f"exec_{uuid.uuid4().hex[:8]}",
+                "action_id": "unknown",
+                "tool_name": None,
+                "status": "failed",
+                "success": False,
+                "error_code": "NO_VALID_ACTION",
+                "message": "No valid action provided to execute_node.",
+                "recoverable": True,
+                "data_version_id": state.get("active_data_version_id"),
+                "data_version_update": None,
+                "payload": {},
+                "artifacts": [],
+                "raw_payload": {},
+            }
+        }
 
     # 1. Current action fingerprint
     current_hash = get_action_hash(action.tool_name, action.arguments)
@@ -379,6 +395,9 @@ def execute_node(state: GraphState):
 
     safe_result = sanitize_results(raw_payload)
 
+    if hasattr(safe_result, "model_dump"):
+        safe_result = safe_result.model_dump()
+
     return {"current_execution": safe_result}
 
 def summarize_node(state: GraphState):
@@ -393,18 +412,28 @@ def summarize_node(state: GraphState):
 
     if isinstance(raw_result, dict):
         status = raw_result.get("status", "ok" if raw_result.get("success", True) else "failed")
-        success = bool(raw_result.get("success", status in ["ok", "warning"]))
+        success = bool(raw_result.get("success", status in {"ok", "warning"}))
         error_code = raw_result.get("error_code")
         message = raw_result.get("message")
+        recoverable = bool(raw_result.get("recoverable", False))
         artifacts = raw_result.get("artifacts", []) or []
-        payload = raw_result.get("payload", {})
+        payload = raw_result.get("payload", {}) or {}
+        data_version_id = raw_result.get("data_version_id") or state.get("active_data_version_id")
+        data_version_update = raw_result.get("data_version_update")
+
+        if data_version_update is None and isinstance(payload, dict):
+            data_version_update = payload.get("data_version_update")
+
     else:
         status = "failed"
         success = False
         error_code = "NON_STRUCTURED_EXECUTION_RESULT"
         message = str(raw_result)
+        recoverable = True
         artifacts = []
         payload = {"result": raw_result}
+        data_version_id = state.get("active_data_version_id")
+        data_version_update = None
 
     summary = (
         f"Tool {tool_name} finished with status={status}, success={success}. "
@@ -414,51 +443,38 @@ def summarize_node(state: GraphState):
     if error_code:
         summary += f" error_code={error_code}."
 
-    refined_observation = {
-        "observation_id": f"obs_{uuid.uuid4().hex[:8]}",
-        "source_action_id": getattr(current_action, "action_id", "unknown"),
-        "tool_name": tool_name,
-        "arguments": arguments,
+    refined_observation_model = Observation(
+        observation_id=f"obs_{uuid.uuid4().hex[:8]}",
+        source_action_id=getattr(current_action, "action_id", "unknown"),
+        tool_name=tool_name,
+        arguments=arguments,
 
-        # Phase 2: provenance
-        "data_version_id": state.get("active_data_version_id"),
+        data_version_id=data_version_id,
 
-        "status": status,
-        "success": success,
-        "error_code": error_code,
-        "message": message,
-        "artifacts": artifacts,
-        "summary": summary,
-        "structured_data": {
+        status=status,
+        success=success,
+        error_code=error_code,
+        message=message,
+        recoverable=recoverable,
+        artifacts=artifacts,
+        summary=summary,
+        structured_data={
             "status": status,
             "success": success,
             "error_code": error_code,
             "message": message,
+            "recoverable": recoverable,
             "artifacts": artifacts,
             "payload": payload,
-            # Phase 2: provenance
-            "data_version_id": state.get("active_data_version_id"),
+            "data_version_id": data_version_id,
+            "data_version_update": data_version_update,
         },
-        "raw_data": raw_result,
-    }
+        raw_data=raw_result if isinstance(raw_result, dict) else {"result": raw_result},
+    )
+
+    refined_observation = refined_observation_model.model_dump()
 
     print(f"[Summarize]: archived result for {tool_name}.")
-
-    data_version_update = None
-
-    if isinstance(raw_result, dict):
-        data_version_update = raw_result.get("data_version_update")
-
-        if data_version_update is None:
-            payload_obj = raw_result.get("payload", {})
-            if isinstance(payload_obj, dict):
-                data_version_update = payload_obj.get("data_version_update")
-
-                if data_version_update is None:
-                    result_obj = payload_obj.get("result")
-                    if isinstance(result_obj, dict):
-                        data_version_update = result_obj.get("data_version_update")
-
 
     updates = {
         "observations": [refined_observation],
@@ -479,7 +495,7 @@ def summarize_node(state: GraphState):
             tool_name=tool_name,
             action_id=getattr(current_action, "action_id", "unknown"),
             arguments=arguments,
-            data_version_id=state.get("active_data_version_id"),
+            data_version_id=data_version_id,
             status=status,
             success=success,
             message=message,

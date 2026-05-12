@@ -113,16 +113,32 @@ class ToolExecutionResult(BaseModel):
     action_id: str = Field(..., description="Related action ID")
     tool_name: Optional[str] = Field(None, description="Tool name")
 
-    # success is a legacy boolean summary for UI; status is the semantic outcome.
+    status: Literal["ok", "warning", "blocked", "failed"] = Field(
+        default="ok",
+        description="Semantic execution status",
+    )
     success: bool = Field(..., description="Whether the tool task succeeded semantically")
-    status: Literal["ok", "warning", "blocked", "failed"] = Field(default="ok", description="Semantic execution status")
 
     error_code: Optional[str] = Field(None, description="Machine-readable error code")
     message: Optional[str] = Field(None, description="Human-readable message")
     recoverable: bool = Field(default=False, description="Whether recovery is possible")
 
+    # Version provenance.
+    data_version_id: Optional[str] = Field(
+        None,
+        description="Data version used by this tool execution",
+    )
+    data_version_update: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Data version update produced by mutating tools",
+    )
+
+    # Canonical structured result.
     payload: Dict[str, Any] = Field(default_factory=dict, description="Structured tool return data")
     artifacts: List[Dict[str, Any]] = Field(default_factory=list, description="Generated files, plots, etc.")
+
+    # Raw normalized plugin payload for debugging/audit.
+    raw_payload: Dict[str, Any] = Field(default_factory=dict)
 
 class Observation(BaseModel):
     observation_id: str = Field(..., description="Unique observation ID")
@@ -134,6 +150,8 @@ class Observation(BaseModel):
     success: bool = Field(default=True)
     error_code: Optional[str] = None
     message: Optional[str] = None
+    artifacts: List[Dict[str, Any]] = Field(default_factory=list)
+    recoverable: bool = False
     artifacts: List[Dict[str, Any]] = Field(default_factory=list)
 
     summary: str = Field(..., description="Short summary for the LLM")

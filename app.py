@@ -116,7 +116,7 @@ with st.sidebar:
         audit_log = st.session_state.get("data_audit_log", [])
 
         if audit_log:
-            with st.expander("📜 Data audit trail"):
+            with st.expander("Data audit trail"):
                 for event in audit_log:
                     event_type = event.get("event_type", "unknown_event")
                     version_id = event.get("version_id")
@@ -143,7 +143,7 @@ with st.sidebar:
 
         if analysis_runs:
             st.divider()
-            st.subheader("📊 Analysis Results")
+            st.subheader("Analysis Results")
 
             for run in analysis_runs[-10:]:
                 title = run.get("title") or run.get("tool_name", "Analysis")
@@ -210,7 +210,7 @@ with st.sidebar:
                                 st.json(artifact)
 
             st.divider()
-            st.subheader("📄 Export Report")
+            st.subheader("Export Report")
 
             report_user_request = ""
             if st.session_state.get("messages"):
@@ -259,7 +259,7 @@ with st.sidebar:
     plan = state_snapshot.values.get("analysis_plan")
     if plan:
         st.divider()
-        st.subheader("📝 Current analysis plan")
+        st.subheader("Current analysis plan")
         for i, step in enumerate(plan):
             st.info(f"{i + 1}. {step}")
 
@@ -519,9 +519,9 @@ if (is_new_task or is_resuming) and not is_interrupted:
                                 st.write_stream(typewriter_effect(f"> *{reasoning}*"))
 
                             if action_type == "tool_call":
-                                st.info(f"Scheduling tool: `{tool_name}`", icon="⚙️")
+                                st.info(f"Scheduling tool: `{tool_name}`")
                             elif action_type == "final_answer":
-                                st.success("Reasoning complete, preparing report.", icon="🎉")
+                                st.success("Reasoning complete, preparing report.")
 
                 elif node_name == "execute_node":
                     execution = state_data.get("current_execution")
@@ -545,11 +545,11 @@ if (is_new_task or is_resuming) and not is_interrupted:
 
                     elif current_action.action_type == "ask_user":
                         live_display.empty()
-                        st.warning(f"🤖 Agent asks for input: {current_action.reasoning_summary}")
+                        st.warning(f"Agent asks for input: {current_action.reasoning_summary}")
 
                         st.session_state.messages.append({
                             "role": "assistant",
-                            "content": f"🤖 Agent asks for input: {current_action.reasoning_summary}"
+                            "content": f"Agent asks for input: {current_action.reasoning_summary}"
                         })
                         st.rerun()
 

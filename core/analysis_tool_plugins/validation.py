@@ -47,6 +47,9 @@ def _schema_dict_for_plugin(tool_name: str) -> Dict[str, Any] | None:
     if argument_schema is None:
         return None
 
+    if hasattr(argument_schema, "to_schema_dict"):
+        return argument_schema.to_schema_dict()
+
     if hasattr(argument_schema, "to_legacy_schema_dict"):
         return argument_schema.to_legacy_schema_dict()
 
