@@ -19,3 +19,6 @@ artifacts/
 
 .DS_Store
 Thumbs.db
+
+demo_data/*.duckdb
+!demo_data/.gitkeep
