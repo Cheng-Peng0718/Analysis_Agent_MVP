@@ -107,3 +107,43 @@ def get_available_evidence_categories() -> list[str]:
                 categories.append(value)
 
     return categories
+
+def get_tool_specs_for_evidence_categories(categories: list[str]) -> dict[str, list[dict]]:
+    """
+    Return tool specs grouped by evidence category.
+
+    This is dynamic and plugin-owned:
+    - tools declare evidence_categories
+    - registry scans tools
+    - no central category -> tool mapping
+    """
+    requested = {
+        str(category).strip()
+        for category in categories or []
+        if str(category).strip()
+    }
+
+    result: dict[str, list[dict]] = {
+        category: []
+        for category in requested
+    }
+
+    specs = get_tool_specs_for_llm()
+
+    for tool_name, spec in specs.items():
+        evidence_categories = set(spec.get("evidence_categories") or [])
+
+        for category in requested:
+            if category not in evidence_categories:
+                continue
+
+            result[category].append({
+                "tool_name": tool_name,
+                "display_name": spec.get("display_name"),
+                "description": spec.get("description"),
+                "evidence_categories": spec.get("evidence_categories", []),
+                "argument_schema": spec.get("argument_schema", {}),
+                "usage_guidance": spec.get("usage_guidance"),
+            })
+
+    return result

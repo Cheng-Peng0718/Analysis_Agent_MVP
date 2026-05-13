@@ -119,6 +119,7 @@ def execute_analysis_tool(action: ActionProposal, context_pkg) -> ToolExecutionR
             data_versions=getattr(context_pkg, "data_versions", []) or [],
             active_data_version_id=getattr(context_pkg, "active_data_version_id", None),
             data_audit_log=getattr(context_pkg, "data_audit_log", []) or [],
+            analysis_runs=getattr(context_pkg, "analysis_runs", []) or [],
         )
 
         print(f"Running tool: {tool_name}, arguments: {action.arguments}")

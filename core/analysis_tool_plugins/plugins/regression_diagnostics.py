@@ -78,6 +78,156 @@ def _get_arg(context, name: str, default: Any = None) -> Any:
     except Exception:
         return default
 
+def _get_analysis_runs(context) -> list[dict[str, Any]]:
+    runs = getattr(context, "analysis_runs", None)
+
+    if runs is None:
+        return []
+
+    if isinstance(runs, list):
+        return runs
+
+    return []
+
+
+def _run_id(run: dict[str, Any]) -> str | None:
+    return run.get("run_id") or run.get("analysis_run_id")
+
+
+def _extract_model_spec_from_run(run: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = run.get("metadata", {}) or {}
+
+    model_spec = metadata.get("model_spec")
+
+    if isinstance(model_spec, dict):
+        return model_spec
+
+    return None
+
+
+def _find_regression_run_by_id(
+    analysis_runs: list[dict[str, Any]],
+    source_analysis_run_id: str | None,
+) -> dict[str, Any] | None:
+    if not source_analysis_run_id:
+        return None
+
+    for run in analysis_runs or []:
+        if _run_id(run) == source_analysis_run_id:
+            return run
+
+    return None
+
+
+def _find_latest_regression_run(
+    analysis_runs: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for run in reversed(analysis_runs or []):
+        if run.get("status") not in {"ok", "warning"}:
+            continue
+
+        categories = run.get("evidence_categories", []) or []
+
+        if "regression_model" not in categories:
+            continue
+
+        if _extract_model_spec_from_run(run):
+            return run
+
+    return None
+
+
+def _as_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [str(item) for item in value]
+
+    if isinstance(value, tuple):
+        return [str(item) for item in value]
+
+    if isinstance(value, str):
+        return [value]
+
+    return [str(value)]
+
+
+def _has_missing_dataset_columns(
+    df,
+    target_col: Any,
+    feature_cols: list[str],
+) -> bool:
+    if not target_col or target_col not in df.columns:
+        return True
+
+    return any(col not in df.columns for col in feature_cols)
+
+
+def _resolve_diagnostic_model_inputs(
+    context,
+    df,
+) -> tuple[str | None, list[str], dict[str, Any]]:
+    """
+    Resolve diagnostics target/features.
+
+    Priority:
+    1. Explicit source_analysis_run_id if provided.
+    2. Latest successful regression_model run if explicit args are missing
+       or explicit feature columns are not active dataset columns.
+    3. Explicit target_col / feature_cols fallback.
+
+    This aligns diagnostics with the regression model contract and prevents
+    dummy coefficient terms such as region_North from being treated as raw
+    dataset columns.
+    """
+    explicit_target = _get_arg(context, "target_col")
+    explicit_features = _as_string_list(_get_arg(context, "feature_cols", []))
+    source_analysis_run_id = _get_arg(context, "source_analysis_run_id")
+
+    analysis_runs = _get_analysis_runs(context)
+
+    selected_run = _find_regression_run_by_id(
+        analysis_runs,
+        source_analysis_run_id,
+    )
+
+    if selected_run is None:
+        selected_run = _find_latest_regression_run(analysis_runs)
+
+    explicit_args_missing_or_invalid = (
+        not explicit_target
+        or not explicit_features
+        or _has_missing_dataset_columns(df, explicit_target, explicit_features)
+    )
+
+    if selected_run is not None and (
+        source_analysis_run_id or explicit_args_missing_or_invalid
+    ):
+        model_spec = _extract_model_spec_from_run(selected_run) or {}
+
+        target_col = model_spec.get("target_col")
+        feature_cols = _as_string_list(
+            model_spec.get("original_feature_cols")
+        )
+
+        if target_col and feature_cols:
+            return target_col, feature_cols, {
+                "resolved_from_model_spec": True,
+                "source_analysis_run_id": _run_id(selected_run),
+                "source_analysis_title": selected_run.get("title"),
+                "source_model_spec": model_spec,
+                "explicit_target_col": explicit_target,
+                "explicit_feature_cols": explicit_features,
+            }
+
+    return explicit_target, explicit_features, {
+        "resolved_from_model_spec": False,
+        "source_analysis_run_id": source_analysis_run_id,
+        "explicit_target_col": explicit_target,
+        "explicit_feature_cols": explicit_features,
+    }
+
 
 def execute_regression_diagnostics(context) -> Dict[str, Any]:
     """
@@ -94,10 +244,15 @@ def execute_regression_diagnostics(context) -> Dict[str, Any]:
     try:
         df = context.load_df()
 
+        target_col, feature_cols, resolution_details = _resolve_diagnostic_model_inputs(
+            context,
+            df,
+        )
+
         prep = prepare_regression_data(
             df,
-            _get_arg(context, "target_col"),
-            _get_arg(context, "feature_cols", []),
+            target_col,
+            feature_cols,
             max_missing_rate=float(_get_arg(context, "max_missing_rate", 0.40)),
             max_categorical_levels=int(_get_arg(context, "max_categorical_levels", 10)),
             numeric_parse_threshold=float(_get_arg(context, "numeric_parse_threshold", 0.85)),
@@ -152,6 +307,7 @@ def execute_regression_diagnostics(context) -> Dict[str, Any]:
 
         details = {
             **prep["details"],
+            **resolution_details,
             "vif": vif_rows,
             "breusch_pagan": breusch_pagan,
         }
@@ -219,6 +375,12 @@ def extract_regression_diagnostics(
 
     metadata = compact_dict({
         "breusch_pagan": bp,
+        "resolved_from_model_spec": payload.get("resolved_from_model_spec"),
+        "source_analysis_run_id": payload.get("source_analysis_run_id"),
+        "source_analysis_title": payload.get("source_analysis_title"),
+        "source_model_spec": payload.get("source_model_spec"),
+        "explicit_target_col": payload.get("explicit_target_col"),
+        "explicit_feature_cols": payload.get("explicit_feature_cols"),
         "n_eff": payload.get("n_eff"),
         "p_eff": payload.get("p_eff"),
         "target": payload.get("target"),
@@ -292,14 +454,28 @@ MODEL_DIAGNOSTICS_DISPLAY = DisplayConfig(
 PLUGIN = register_plugin(AnalysisToolPlugin(
     tool_name="regression_diagnostics",
     display_name="Model Diagnostics",
+    description=(
+        "Run regression diagnostics such as VIF and Breusch-Pagan tests. "
+        "When a previous regression model exists, this tool can diagnose that model "
+        "using its stored model_spec instead of requiring manually supplied columns."
+    ),
+    usage_guidance=(
+        "Prefer diagnosing the most recent regression_model analysis run. "
+        "After run_multiple_regression has been executed, this tool may be called "
+        "with source_analysis_run_id or with no target_col/feature_cols; it will "
+        "resolve the latest regression model spec. If target_col/feature_cols are supplied "
+        "but contain encoded coefficient terms such as region_North or segment_Corporate, "
+        "the tool should fall back to the stored model_spec and use the original active-dataset "
+        "features such as region and segment."
+    ),
     evidence_categories=["regression_diagnostics", "model_diagnostics"],
     requires_confirmation=False,
     argument_schema=ArgumentSchema(
-        required={
+        required={},
+        optional={
+            "source_analysis_run_id": str,
             "target_col": str,
             "feature_cols": list,
-        },
-        optional={
             "max_missing_rate": float,
             "max_categorical_levels": int,
             "numeric_parse_threshold": float,

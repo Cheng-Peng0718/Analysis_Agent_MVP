@@ -206,6 +206,7 @@ class ContextPackage(BaseModel):
     observations: List[Dict[str, Any]] = Field(default_factory=list)
     workspace_dir: str = "./"
     context_text: str = ""
+    analysis_runs: List[Dict[str, Any]] = Field(default_factory=list)
 
     data_versions: List[Dict[str, Any]] = Field(default_factory=list)
     active_data_version_id: Optional[str] = None
@@ -219,6 +220,7 @@ class AgentContext:
         data_versions: list = None,
         active_data_version_id: str = None,
         data_audit_log: list = None,
+        analysis_runs: list = None,
     ):
         self.workspace_dir = workspace_dir
 
@@ -235,6 +237,7 @@ class AgentContext:
         self.data_versions = data_versions or []
         self.active_data_version_id = active_data_version_id
         self.data_audit_log = data_audit_log or []
+        self.analysis_runs = analysis_runs or []
 
     def _get_data_path(self):
         """Resolve a tabular data file inside the sandbox."""

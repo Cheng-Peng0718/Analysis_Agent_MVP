@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 from core.schema import ContextPackage, DatasetProfile, ColumnProfile
-
+from core.analysis_tool_plugins.registry import get_tool_specs_for_evidence_categories
 
 def get_observation_data_version(obs):
     if not isinstance(obs, dict):
@@ -249,6 +249,7 @@ def build_context(step,
                   active_data_version_id=None,
                   data_audit_log=None,
                   analysis_coverage_brief=None,
+                  analysis_runs=None,
                   ):
     """
     Build the full context text sent to the LLM.
@@ -323,6 +324,36 @@ def build_context(step,
                         + "\n"
                 )
 
+            if missing_evidence_categories:
+                candidate_tools_by_category = get_tool_specs_for_evidence_categories(
+                    missing_evidence_categories
+                )
+
+                if candidate_tools_by_category:
+                    deliverable_log += "- candidate_tools_for_missing_evidence:\n"
+
+                    for category, tools in candidate_tools_by_category.items():
+                        deliverable_log += f"  - evidence_category: {category}\n"
+
+                        if not tools:
+                            deliverable_log += "    tools: []\n"
+                            continue
+
+                        deliverable_log += "    tools:\n"
+
+                        for tool in tools[:5]:
+                            argument_schema = tool.get("argument_schema", {}) or {}
+                            required_args = argument_schema.get("required", {}) or {}
+                            optional_args = argument_schema.get("optional", {}) or {}
+
+                            deliverable_log += (
+                                f"      - tool_name: {tool.get('tool_name')}\n"
+                                f"        display_name: {tool.get('display_name')}\n"
+                                f"        evidence_categories: {tool.get('evidence_categories')}\n"
+                                f"        required_args: {list(required_args.keys())}\n"
+                                f"        optional_args: {list(optional_args.keys())}\n"
+                            )
+
             if missing_evidence_requirements:
                 deliverable_log += "- missing_evidence_requirements:\n"
 
@@ -339,8 +370,9 @@ def build_context(step,
                 deliverable_log += (
                     "The previous final answer did not yet satisfy the required evidence coverage. "
                     "Do not produce another final_answer unless the missing evidence is impossible to obtain. "
-                    "Call exactly one appropriate analysis tool next. Use the available tool cards and their "
-                    "plugin-declared evidence_categories to choose a tool that covers one missing evidence category.\n"
+                    "Call exactly one appropriate analysis tool next. Prefer one of the listed "
+                    "candidate_tools_for_missing_evidence, because those tools declare evidence_categories "
+                    "that cover the missing requirement.\n"
                 )
 
             warnings = deliverable_check.get("warnings", []) or []
@@ -456,6 +488,7 @@ def build_context(step,
         context_text=context_text,
         profile=profile,
         observations=observations,
+        analysis_runs=analysis_runs or [],
         workspace_dir=workspace_dir,
         deliverable_check=deliverable_check,
 

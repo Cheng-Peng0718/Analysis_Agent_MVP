@@ -94,6 +94,7 @@ def build_context_node(state: GraphState):
         active_data_version_id=state.get("active_data_version_id"),
         data_audit_log=state.get("data_audit_log", []),
         analysis_coverage_brief=state.get("analysis_coverage_brief"),
+        analysis_runs=state.get("analysis_runs", []),
     )
 
     return {
@@ -165,6 +166,7 @@ def supervisor_node(state: GraphState):
         active_data_version_id=state.get("active_data_version_id"),
         data_audit_log=state.get("data_audit_log", []),
         analysis_coverage_brief=state.get("analysis_coverage_brief"),
+        analysis_runs=state.get("analysis_runs", []),
     )
 
     action = call_supervisor(context_pkg)
@@ -479,6 +481,7 @@ def execute_node(state: GraphState):
         active_data_version_id=state.get("active_data_version_id"),
         data_audit_log=state.get("data_audit_log", []),
         analysis_coverage_brief=state.get("analysis_coverage_brief"),
+        analysis_runs=state.get("analysis_runs", []),
     )
 
     exec_result = execute_tool(action, context_pkg)

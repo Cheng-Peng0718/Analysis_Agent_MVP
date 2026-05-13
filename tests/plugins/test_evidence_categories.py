@@ -109,3 +109,18 @@ def test_analysis_run_records_plugin_evidence_categories(tmp_path):
     assert run["tool_name"] == "kpi_summary"
     assert "evidence_categories" in run
     assert "kpi_summary" in run["evidence_categories"]
+
+from core.analysis_tool_plugins.registry import get_tool_specs_for_evidence_categories
+
+
+def test_registry_finds_candidate_tools_for_missing_evidence_categories():
+    candidates = get_tool_specs_for_evidence_categories(["data_quality"])
+
+    assert "data_quality" in candidates
+
+    tool_names = {
+        item["tool_name"]
+        for item in candidates["data_quality"]
+    }
+
+    assert "missingness_report" in tool_names

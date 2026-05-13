@@ -356,9 +356,28 @@ def execute_linear_model(context) -> Dict[str, Any]:
                 model_p_value is not None and model_p_value < alpha
         )
 
+        encoded_feature_cols = [
+            str(col)
+            for col in X.columns
+        ]
+
+        model_spec = {
+            "model_type": "ols",
+            "target_col": str(target_col),
+            "original_feature_cols": [str(col) for col in (feature_cols or [])],
+            "encoded_feature_cols": encoded_feature_cols,
+            "used_features": prep["details"].get("used_features", []),
+            "excluded_features": prep["details"].get("excluded_features", []),
+            "data_version_id": getattr(context, "active_data_version_id", None),
+            "nobs": int(model.nobs),
+            "r_squared": _round_or_none(model.rsquared),
+            "adj_r_squared": _round_or_none(model.rsquared_adj),
+        }
+
         details = {
             **prep["details"],
             "model_type": "OLS multiple linear regression",
+            "model_spec": model_spec,
             "r_squared": _round_or_none(model.rsquared),
             "adj_r_squared": _round_or_none(model.rsquared_adj),
             "f_statistic": _round_or_none(model.fvalue),
@@ -447,6 +466,7 @@ def extract_linear_model(
     # Internal/system fields. These should not appear in the main report.
     metadata = compact_dict({
         "model_type": payload.get("model_type"),
+        "model_spec": payload.get("model_spec"),
         "aic": payload.get("aic"),
         "bic": payload.get("bic"),
         "df_model": payload.get("df_model"),
