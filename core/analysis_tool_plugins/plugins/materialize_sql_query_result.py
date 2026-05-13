@@ -197,6 +197,7 @@ materialize_sql_query_result_plugin = AnalysisToolPlugin(
     usage_guidance=(
         "Use this when a SQL query result should become the active dataset for downstream "
         "DataFrame tools such as groupby_summary, summary statistics, regression, or plotting."
+        "When materializing data for inferential statistical analysis such as t-tests, ANOVA, statistical group comparison, correlation tests, or regression, preserve the correct observational unit. Do not pre-aggregate to one row per group unless the user explicitly asks for descriptive group totals. For example, to test whether revenue differs by region, materialize customer-level or order-level rows with both region and revenue, not region-level totals only."
     ),
     use_when=[
         "The user asks to materialize, extract, prepare, or create a dataset from SQL.",
