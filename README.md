@@ -1,3 +1,5 @@
+Most AI data tools give you SQL. This one gives you statistical analysis you can defend in a meeting.
+
 <img width="1448" height="1086" alt="Structure" src="https://github.com/user-attachments/assets/27b80f08-30a1-42bb-98c9-3615d8b21c3c" />
 
 # SQL-Connected AI Data Analyst Agent
